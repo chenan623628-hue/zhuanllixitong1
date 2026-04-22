@@ -20,7 +20,7 @@ class AuthFactorBinding(BaseModel):
     is_primary = Column(Boolean, default=False, nullable=False, comment="是否为主认证因子")
     
     config_data = Column(Text, nullable=True, comment="配置数据（JSON 格式，如 TOTP 的密钥等）")
-    metadata = Column(Text, nullable=True, comment="元数据（JSON 格式）")
+    extra_meta = Column("extra_metadata", Text, nullable=True, comment="元数据（JSON 格式）")
     
     last_used_at = Column(DateTime, nullable=True, comment="最后使用时间")
     last_verified_at = Column(DateTime, nullable=True, comment="最后验证成功时间")

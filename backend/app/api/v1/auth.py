@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.schemas import ApiResponse
 from app.core.responses import create_success_response
-from app.core.auth import get_current_user, CurrentUser
+from app.core.auth import get_current_user, get_current_user_optional, CurrentUser
 from app.db import get_db
 from app.services.auth import AuthService, SessionService
 
@@ -26,12 +26,12 @@ class LoginRequest(BaseModel):
 
 class ChallengeInitRequest(BaseModel):
     factor_type: str = Field(..., description="认证因子类型")
-    user_id: int | None = Field(None, description="用户 ID（可选）")
 
 
 class ChallengeVerifyRequest(BaseModel):
     challenge_id: str = Field(..., description="挑战 ID")
     verification_code: str = Field(..., description="验证码")
+    device_id: str | None = Field(None, description="设备 ID（用于验证上下文匹配）")
 
 
 class RefreshTokenRequest(BaseModel):
@@ -87,25 +87,22 @@ async def init_challenge(
     data: ChallengeInitRequest,
     db: Session = Depends(get_db),
     x_forwarded_for: str | None = Header(None),
-    current_user: CurrentUser | None = Depends(get_current_user),
+    current_user: CurrentUser | None = Depends(get_current_user_optional),
 ):
+    from app.core.exceptions import AuthException
+    from app.core.schemas import ErrorCode
+    
     client_ip = x_forwarded_for or request.client.host if request.client else None
     
-    user_id = data.user_id
-    if not user_id and current_user:
-        user_id = current_user.id
-    
-    if not user_id:
-        from app.core.exceptions import AuthException
-        from app.core.schemas import ErrorCode
+    if not current_user:
         raise AuthException(
             code=ErrorCode.AUTH_TOKEN_MISSING,
-            message="需要用户 ID 或已登录状态"
+            message="需要登录才能发起挑战"
         )
     
     auth_service = AuthService(db)
     result = auth_service.initiate_challenge(
-        user_id=user_id,
+        user_id=current_user.id,
         factor_type=data.factor_type,
         ip_address=client_ip,
     )
@@ -123,15 +120,21 @@ async def verify_challenge(
     db: Session = Depends(get_db),
     user_agent: str | None = Header(None),
     x_forwarded_for: str | None = Header(None),
+    current_user: CurrentUser | None = Depends(get_current_user_optional),
 ):
+    from app.core.exceptions import AuthException
+    from app.core.schemas import ErrorCode
+    
     client_ip = x_forwarded_for or request.client.host if request.client else None
     
     auth_service = AuthService(db)
     result = auth_service.verify_challenge(
         challenge_id=data.challenge_id,
         verification_code=data.verification_code,
+        device_id=data.device_id,
         ip_address=client_ip,
         user_agent=user_agent,
+        current_user_id=current_user.id if current_user else None,
     )
     
     return create_success_response(
@@ -149,7 +152,7 @@ async def logout(
     auth_service = AuthService(db)
     
     if data and data.session_id:
-        success = auth_service.logout(data.session_id)
+        success = auth_service.logout(data.session_id, current_user.id)
     else:
         success = auth_service.logout_all_sessions(current_user.id)
     

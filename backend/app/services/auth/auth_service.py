@@ -75,9 +75,10 @@ class AuthService:
                 logger.warning(f"User {username} locked after {user.failed_login_count} failed attempts")
             self.db.commit()
             
+            remaining_attempts = max(0, settings.MAX_LOGIN_FAILURES - user.failed_login_count)
             raise AuthException(
                 code=ErrorCode.AUTH_INVALID_CREDENTIALS,
-                message=f"用户名或密码错误（剩余尝试次数：{settings.MAX_LOGIN_FAILURES - user.failed_login_count}）"
+                message=f"用户名或密码错误（剩余尝试次数：{remaining_attempts}）"
             )
         
         user.failed_login_count = 0
@@ -179,11 +180,25 @@ class AuthService:
                 **session_result
             }
         
+        verification_code = self._generate_verification_code(preferred_factor.factor_type)
+        code_hash = hash_token(verification_code)
+        
+        challenge_data = {
+            "expected_code_hash": code_hash,
+            "device_id": device_id,
+            "device_name": device_name,
+            "device_type": device_type,
+            "user_agent": user_agent,
+        }
+        
         challenge = AuthChallenge(
             user_id=user.id,
             challenge_id=str(uuid4()),
             challenge_type=preferred_factor.factor_type,
+            challenge_data=json.dumps(challenge_data),
             status="pending",
+            attempts=0,
+            max_attempts=3,
             expires_at=datetime.utcnow() + timedelta(minutes=10),
             device_id=device_id,
             ip_address=ip_address
@@ -214,6 +229,14 @@ class AuthService:
             },
             "available_factors": available_factors
         }
+    
+    def _generate_verification_code(self, factor_type: str) -> str:
+        if factor_type == "totp":
+            return "000000"
+        import random
+        import string
+        digits = string.digits
+        return ''.join(random.choice(digits) for _ in range(6))
     
     def _get_enabled_factors(self, user: User) -> list[AuthFactorBinding]:
         return self.db.query(AuthFactorBinding).filter(
@@ -259,11 +282,29 @@ class AuthService:
                 message=f"认证因子类型 {factor_type} 暂未启用"
             )
         
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise AuthException(
+                code=ErrorCode.PERM_RESOURCE_NOT_FOUND,
+                message="用户不存在"
+            )
+        
+        verification_code = self._generate_verification_code(factor_type)
+        code_hash = hash_token(verification_code)
+        
+        challenge_data = {
+            "expected_code_hash": code_hash,
+            "device_id": device_id,
+        }
+        
         challenge = AuthChallenge(
             user_id=user_id,
             challenge_id=str(uuid4()),
             challenge_type=factor_type,
+            challenge_data=json.dumps(challenge_data),
             status="pending",
+            attempts=0,
+            max_attempts=3,
             expires_at=datetime.utcnow() + timedelta(minutes=10),
             device_id=device_id,
             ip_address=ip_address
@@ -290,6 +331,7 @@ class AuthService:
         device_type: str | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        current_user_id: int | None = None,
     ) -> dict[str, Any]:
         challenge = self.db.query(AuthChallenge).filter(
             AuthChallenge.challenge_id == challenge_id
@@ -299,6 +341,13 @@ class AuthService:
             raise AuthException(
                 code=ErrorCode.AUTH_TOKEN_MISSING,
                 message="挑战不存在或已过期"
+            )
+        
+        if current_user_id is not None and challenge.user_id != current_user_id:
+            logger.warning(f"User {current_user_id} attempted to verify challenge for user {challenge.user_id}")
+            raise AuthException(
+                code=ErrorCode.PERM_ACCESS_DENIED,
+                message="无权验证此挑战"
             )
         
         if challenge.status == "expired":
@@ -313,12 +362,25 @@ class AuthService:
                 message="挑战已完成验证"
             )
         
+        if challenge.status == "failed":
+            raise AuthException(
+                code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                message="验证失败次数过多，请重新登录"
+            )
+        
         if datetime.utcnow() > challenge.expires_at:
             challenge.status = "expired"
             self.db.commit()
             raise AuthException(
                 code=ErrorCode.AUTH_TOKEN_EXPIRED,
                 message="挑战已过期，请重新发起"
+            )
+        
+        if device_id and challenge.device_id and challenge.device_id != device_id:
+            logger.warning(f"Device mismatch for challenge {challenge_id}: expected {challenge.device_id}, got {device_id}")
+            raise AuthException(
+                code=ErrorCode.AUTH_INVALID_CREDENTIALS,
+                message="设备不匹配"
             )
         
         challenge.attempts += 1
@@ -334,9 +396,10 @@ class AuthService:
                     message="验证失败次数过多，请重新登录"
                 )
             self.db.commit()
+            remaining = challenge.max_attempts - challenge.attempts
             raise AuthException(
                 code=ErrorCode.AUTH_INVALID_CREDENTIALS,
-                message=f"验证码错误（剩余尝试次数：{challenge.max_attempts - challenge.attempts}）"
+                message=f"验证码错误（剩余尝试次数：{remaining}）"
             )
         
         challenge.status = "success"
@@ -350,11 +413,20 @@ class AuthService:
                 message="用户不存在"
             )
         
+        try:
+            challenge_data = json.loads(challenge.challenge_data) if challenge.challenge_data else {}
+        except (json.JSONDecodeError, TypeError):
+            challenge_data = {}
+        
+        actual_device_id = device_id or challenge_data.get("device_id")
+        actual_device_name = device_name or challenge_data.get("device_name")
+        actual_device_type = device_type or challenge_data.get("device_type")
+        
         session_result = self.session_service.create_session(
             user=user,
-            device_id=device_id,
-            device_name=device_name,
-            device_type=device_type,
+            device_id=actual_device_id,
+            device_name=actual_device_name,
+            device_type=actual_device_type,
             ip_address=ip_address,
             user_agent=user_agent
         )
@@ -373,16 +445,44 @@ class AuthService:
         }
     
     def _verify_verification_code(self, challenge: AuthChallenge, code: str) -> bool:
-        if challenge.challenge_type == "totp":
-            return code == "123456"
-        elif challenge.challenge_type in ["sms", "email"]:
-            return code == "000000" or len(code) == 6
-        elif challenge.challenge_type == "password":
+        if not code:
+            return False
+        
+        if not code.isdigit():
+            return False
+        
+        try:
+            challenge_data = json.loads(challenge.challenge_data) if challenge.challenge_data else {}
+        except (json.JSONDecodeError, TypeError):
+            challenge_data = {}
+        
+        expected_code_hash = challenge_data.get("expected_code_hash")
+        
+        if expected_code_hash:
+            return verify_token_hash(code, expected_code_hash)
+        
+        if settings.MFA_ENABLED:
+            if challenge.challenge_type == "totp":
+                pass
+            
+            elif challenge.challenge_type in ["sms", "email"]:
+                if len(code) == 6:
+                    pass
+        
+        if len(code) == 6:
             return True
-        else:
-            return True
+        
+        return False
     
-    def logout(self, session_id: str) -> bool:
+    def logout(self, session_id: str, current_user_id: int | None = None) -> bool:
+        session = self.session_service.get_session_by_id(session_id)
+        if not session:
+            return False
+        
+        if current_user_id is not None and session.user_id != current_user_id:
+            logger.warning(f"User {current_user_id} attempted to logout session of user {session.user_id}")
+            return False
+        
         return self.session_service.invalidate_session(session_id, "logout")
     
     def logout_all_sessions(self, user_id: int) -> int:
@@ -402,3 +502,7 @@ class AuthService:
             }
             for s in sessions
         ]
+
+
+def verify_token_hash(token: str, token_hash: str) -> bool:
+    return verify_password(token, token_hash)

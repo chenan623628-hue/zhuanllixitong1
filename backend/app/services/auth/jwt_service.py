@@ -5,7 +5,7 @@ M02 认证与会话模块 - JWT 服务
 from datetime import datetime, timedelta
 from typing import Any
 
-import jwt
+from jose import JWTError, jwt as jose_jwt
 
 from app.core.config import settings
 
@@ -25,7 +25,7 @@ def create_access_token(subject: int | str, expires_delta: timedelta | None = No
         "iat": datetime.utcnow()
     }
     
-    encoded_jwt = jwt.encode(
+    encoded_jwt = jose_jwt.encode(
         to_encode,
         settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM
@@ -49,7 +49,7 @@ def create_refresh_token(subject: int | str, expires_delta: timedelta | None = N
         "iat": datetime.utcnow()
     }
     
-    encoded_jwt = jwt.encode(
+    encoded_jwt = jose_jwt.encode(
         to_encode,
         settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM
@@ -60,15 +60,15 @@ def create_refresh_token(subject: int | str, expires_delta: timedelta | None = N
 
 def decode_token(token: str) -> dict[str, Any] | None:
     try:
-        payload = jwt.decode(
+        payload = jose_jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
             algorithms=[settings.JWT_ALGORITHM]
         )
         return payload
-    except jwt.ExpiredSignatureError:
+    except jose_jwt.ExpiredSignatureError:
         return None
-    except jwt.InvalidTokenError:
+    except JWTError:
         return None
 
 
