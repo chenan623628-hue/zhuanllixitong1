@@ -10,92 +10,220 @@
 </head>
 <body>
     <div id="app">
-        <header class="app-header">
-            <div class="header-content">
-                <div class="logo">
-                    <span class="logo-icon">⚖️</span>
-                    <span class="logo-text">专利-标准比对系统</span>
-                </div>
-                <nav class="main-nav">
-                    <a href="#/" class="nav-item active">首页</a>
-                    <a href="#/tasks" class="nav-item">任务管理</a>
-                    <a href="#/files" class="nav-item">文件管理</a>
-                    <a href="#/reports" class="nav-item">报告中心</a>
-                    <a href="#/rules" class="nav-item">规则模板</a>
-                    <a href="#/terms" class="nav-item">术语库</a>
-                    <a href="#/admin" class="nav-item">系统管理</a>
-                </nav>
-                <div class="header-actions">
-                    <div class="user-dropdown">
-                        <span class="user-avatar">管</span>
-                        <span class="user-name">管理员</span>
+        <div id="login-container" style="display: none;">
+            <div class="login-page">
+                <div class="login-card">
+                    <div class="login-header">
+                        <span class="login-logo-icon">⚖️</span>
+                        <h1 class="login-title">专利-标准比对系统</h1>
+                        <p class="login-subtitle">请登录以继续</p>
+                    </div>
+
+                    <div id="login-form-container">
+                        <form id="login-form" class="login-form">
+                            <div class="form-group">
+                                <label for="username" class="form-label">用户名</label>
+                                <input 
+                                    type="text" 
+                                    id="username" 
+                                    name="username" 
+                                    class="form-input"
+                                    placeholder="请输入用户名"
+                                    autocomplete="username"
+                                    required
+                                >
+                            </div>
+                            <div class="form-group">
+                                <label for="password" class="form-label">密码</label>
+                                <div class="password-input-wrapper">
+                                    <input 
+                                        type="password" 
+                                        id="password" 
+                                        name="password" 
+                                        class="form-input"
+                                        placeholder="请输入密码"
+                                        autocomplete="current-password"
+                                        required
+                                    >
+                                    <button type="button" id="toggle-password" class="toggle-password-btn">
+                                        <span id="eye-icon">👁️</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="captcha-group" class="form-group" style="display: none;">
+                                <label for="captcha" class="form-label">验证码</label>
+                                <div class="captcha-row">
+                                    <input 
+                                        type="text" 
+                                        id="captcha" 
+                                        name="captcha" 
+                                        class="form-input captcha-input"
+                                        placeholder="请输入验证码"
+                                        maxlength="4"
+                                    >
+                                    <div class="captcha-image" id="captcha-image" onclick="refreshCaptcha()">
+                                        <span id="captcha-text">AB12</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="login-error" class="form-error" style="display: none;">
+                                <span class="error-icon">⚠️</span>
+                                <span id="error-message">用户名或密码错误</span>
+                            </div>
+                            <button type="submit" id="login-btn" class="btn btn-primary btn-full">
+                                <span id="login-btn-text">登 录</span>
+                                <span id="login-btn-loading" style="display: none;">
+                                    <span class="spinner"></span>
+                                </span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div id="mfa-container" style="display: none;">
+                        <div class="mfa-header">
+                            <button type="button" id="back-to-login" class="back-btn">
+                                ← 返回登录
+                            </button>
+                            <h2 class="mfa-title">二阶段认证</h2>
+                            <p class="mfa-subtitle" id="mfa-subtitle">请输入验证码</p>
+                        </div>
+                        
+                        <div id="mfa-factor-selector" class="mfa-factors" style="display: none;">
+                        </div>
+
+                        <form id="mfa-form" class="mfa-form">
+                            <div class="form-group">
+                                <label for="mfa-code" class="form-label" id="mfa-code-label">验证码</label>
+                                <div class="mfa-code-inputs" id="mfa-code-inputs">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="0">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="1">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="2">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="3">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="4">
+                                    <input type="text" class="mfa-digit" maxlength="1" data-index="5">
+                                </div>
+                            </div>
+                            <div id="mfa-error" class="form-error" style="display: none;">
+                                <span class="error-icon">⚠️</span>
+                                <span id="mfa-error-message">验证码错误</span>
+                            </div>
+                            <div class="mfa-actions">
+                                <button type="button" id="resend-code-btn" class="btn btn-link">
+                                    重新发送
+                                </button>
+                            </div>
+                            <button type="submit" id="mfa-btn" class="btn btn-primary btn-full">
+                                <span id="mfa-btn-text">验 证</span>
+                                <span id="mfa-btn-loading" style="display: none;">
+                                    <span class="spinner"></span>
+                                </span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="login-footer">
+                        <p class="login-help">
+                            忘记密码？请联系
+                            <a href="#" class="link">系统管理员</a>
+                        </p>
                     </div>
                 </div>
             </div>
-        </header>
-        
-        <main class="app-main">
-            <div class="main-content">
-                <div id="page-content">
-                    <div class="welcome-section">
-                        <h1 class="page-title">欢迎使用专利-标准比对系统</h1>
-                        <p class="page-subtitle">V1.0 核心版 - 工程基线模块已就绪</p>
-                        
-                        <div class="dashboard-cards">
-                            <div class="card stat-card">
-                                <div class="card-icon">📁</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">文件总数</div>
-                                </div>
-                            </div>
-                            <div class="card stat-card">
-                                <div class="card-icon">📋</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">比对任务</div>
-                                </div>
-                            </div>
-                            <div class="card stat-card">
-                                <div class="card-icon">📊</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">报告数量</div>
-                                </div>
-                            </div>
+        </div>
+
+        <div id="main-container" style="display: none;">
+            <header class="app-header">
+                <div class="header-content">
+                    <div class="logo">
+                        <span class="logo-icon">⚖️</span>
+                        <span class="logo-text">专利-标准比对系统</span>
+                    </div>
+                    <nav class="main-nav">
+                        <a href="#/" class="nav-item active">首页</a>
+                        <a href="#/tasks" class="nav-item">任务管理</a>
+                        <a href="#/files" class="nav-item">文件管理</a>
+                        <a href="#/reports" class="nav-item">报告中心</a>
+                        <a href="#/rules" class="nav-item">规则模板</a>
+                        <a href="#/terms" class="nav-item">术语库</a>
+                        <a href="#/admin" class="nav-item" id="admin-nav" style="display: none;">系统管理</a>
+                    </nav>
+                    <div class="header-actions">
+                        <div class="user-dropdown">
+                            <span class="user-avatar" id="user-avatar">用</span>
+                            <span class="user-name" id="user-name">用户</span>
+                            <button type="button" id="logout-btn" class="logout-btn">
+                                退出
+                            </button>
                         </div>
-                        
-                        <div class="card action-card">
-                            <h3 class="card-title">快速开始</h3>
-                            <div class="action-buttons">
-                                <button class="btn btn-primary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">➕</span>
-                                    新建比对任务
-                                </button>
-                                <button class="btn btn-secondary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">📤</span>
-                                    上传标准文件
-                                </button>
-                                <button class="btn btn-secondary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">📄</span>
-                                    查看历史报告
-                                </button>
+                    </div>
+                </div>
+            </header>
+            
+            <main class="app-main">
+                <div class="main-content">
+                    <div id="page-content">
+                        <div class="welcome-section">
+                            <h1 class="page-title">欢迎使用专利-标准比对系统</h1>
+                            <p class="page-subtitle">V1.0 核心版 - M02 认证模块已就绪</p>
+                            
+                            <div class="dashboard-cards">
+                                <div class="card stat-card">
+                                    <div class="card-icon">📁</div>
+                                    <div class="card-content">
+                                        <div class="stat-value">0</div>
+                                        <div class="stat-label">文件总数</div>
+                                    </div>
+                                </div>
+                                <div class="card stat-card">
+                                    <div class="card-icon">📋</div>
+                                    <div class="card-content">
+                                        <div class="stat-value">0</div>
+                                        <div class="stat-label">比对任务</div>
+                                    </div>
+                                </div>
+                                <div class="card stat-card">
+                                    <div class="card-icon">📊</div>
+                                    <div class="card-content">
+                                        <div class="stat-value">0</div>
+                                        <div class="stat-label">报告数量</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card action-card">
+                                <h3 class="card-title">快速开始</h3>
+                                <div class="action-buttons">
+                                    <button class="btn btn-primary" onclick="alert('功能开发中...')">
+                                        <span class="btn-icon">➕</span>
+                                        新建比对任务
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="alert('功能开发中...')">
+                                        <span class="btn-icon">📤</span>
+                                        上传标准文件
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="alert('功能开发中...')">
+                                        <span class="btn-icon">📄</span>
+                                        查看历史报告
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </main>
-        
-        <footer class="app-footer">
-            <div class="footer-content">
-                <span class="footer-text">专利-标准比对系统 V1.0</span>
-                <span class="footer-divider">|</span>
-                <span class="footer-text">© 2026 版权所有</span>
-            </div>
-        </footer>
+            </main>
+            
+            <footer class="app-footer">
+                <div class="footer-content">
+                    <span class="footer-text">专利-标准比对系统 V1.0</span>
+                    <span class="footer-divider">|</span>
+                    <span class="footer-text">© 2026 版权所有</span>
+                </div>
+            </footer>
+        </div>
     </div>
     
+    <script src="/assets/js/auth.js"></script>
+    <script src="/assets/js/rbac.js"></script>
     <script src="/assets/js/router.js"></script>
     <script src="/assets/js/app.js"></script>
 </body>
