@@ -39,9 +39,37 @@ function showMainApp(user) {
     document.getElementById('user-name').textContent = user.username;
     document.getElementById('user-avatar').textContent = user.username.charAt(0).toUpperCase();
     
-    if (user.is_admin) {
-      document.getElementById('admin-nav').style.display = 'inline-block';
+    loadRbacDataAndRender();
+  }
+}
+
+async function loadRbacDataAndRender() {
+  try {
+    const rbacData = await rbacService.loadRbacData();
+    
+    const navContainer = document.getElementById('nav-container');
+    if (navContainer) {
+      rbacService.renderMenuItems(rbacData.menus, navContainer);
     }
+    
+    const adminNav = document.getElementById('admin-nav');
+    if (adminNav) {
+      if (rbacService.isAdmin()) {
+        adminNav.style.display = 'inline-block';
+      } else {
+        adminNav.style.display = 'none';
+      }
+    }
+    
+    rbacService.renderButtonsWithPermissions(document.body);
+    
+    console.log('RBAC data loaded:', {
+      role: rbacData.role,
+      permissions: rbacData.permissions.length,
+      menus: rbacData.menus.length,
+    });
+  } catch (error) {
+    console.error('Failed to load RBAC data:', error);
   }
 }
 
@@ -266,6 +294,7 @@ function setMfaLoading(loading) {
 function initLogoutButton() {
   const logoutBtn = document.getElementById('logout-btn');
   logoutBtn.addEventListener('click', async () => {
+    rbacService.clear();
     await authService.logout();
     showLoginPage();
   });
