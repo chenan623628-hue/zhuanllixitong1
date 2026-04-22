@@ -4,11 +4,9 @@
 
 创建数据库表并插入默认管理员用户
 """
-import asyncio
 from datetime import datetime, timezone
 from passlib.context import CryptContext
-from sqlalchemy.ext.asyncio import create_async_engine
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
 from app.core.config import settings
 from app.models.base import Base
@@ -24,29 +22,32 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-async def init_database():
+def init_database():
     print("=" * 60)
     print("专利-标准比对系统 - 数据库初始化")
     print("=" * 60)
     
-    engine = create_async_engine(
-        settings.DATABASE_URL,
+    db_url = settings.DATABASE_URL
+    connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
+    
+    engine = create_engine(
+        db_url,
         echo=settings.DEBUG,
-        future=True,
+        connect_args=connect_args,
+        pool_pre_ping=True,
     )
     
-    print(f"\n数据库连接: {settings.DATABASE_URL}")
+    print(f"\n数据库连接: {db_url}")
     print("\n[1/4] 创建数据库表...")
     
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    Base.metadata.create_all(bind=engine)
     
     print("✓ 表创建完成")
     
     print("\n[2/4] 检查默认管理员用户...")
     
-    async with engine.connect() as conn:
-        result = await conn.execute(
+    with engine.connect() as conn:
+        result = conn.execute(
             text("SELECT id FROM users WHERE username = :username"),
             {"username": DEFAULT_ADMIN_USERNAME}
         )
@@ -60,17 +61,17 @@ async def init_database():
         password_hash = get_password_hash(DEFAULT_ADMIN_PASSWORD)
         now = datetime.now(timezone.utc)
         
-        async with engine.begin() as conn:
-            await conn.execute(
+        with engine.begin() as conn:
+            conn.execute(
                 text("""
                 INSERT INTO users (
                     username, email, password_hash, is_active, is_locked,
-                    failed_login_count, require_mfa, mfa_setup_complete,
-                    role, display_name, created_at, updated_at, timezone, locale
+                    failed_login_count, require_mfa, role,
+                    created_at, updated_at
                 ) VALUES (
                     :username, :email, :password_hash, :is_active, :is_locked,
-                    :failed_login_count, :require_mfa, :mfa_setup_complete,
-                    :role, :display_name, :created_at, :updated_at, :timezone, :locale
+                    :failed_login_count, :require_mfa, :role,
+                    :created_at, :updated_at
                 )
                 """),
                 {
@@ -81,13 +82,9 @@ async def init_database():
                     "is_locked": False,
                     "failed_login_count": 0,
                     "require_mfa": False,
-                    "mfa_setup_complete": False,
                     "role": "system_admin",
-                    "display_name": "系统管理员",
                     "created_at": now,
                     "updated_at": now,
-                    "timezone": "Asia/Shanghai",
-                    "locale": "zh-CN",
                 }
             )
         
@@ -101,8 +98,8 @@ async def init_database():
     print("\n⚠️  生产环境请立即修改默认密码！")
     print("\n=" * 60)
     
-    await engine.dispose()
+    engine.dispose()
 
 
 if __name__ == "__main__":
-    asyncio.run(init_database())
+    init_database()

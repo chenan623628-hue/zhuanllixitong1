@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.user import User
 from app.models.auth_factor import AuthFactorBinding, AuthChallenge, AuthFactorCapability
 from app.models.session import Session as SessionModel
-from app.services.auth.password import verify_password, hash_token
+from app.services.auth.password import verify_password, hash_token, verify_token_hash
 from app.services.auth.jwt_service import decode_token
 from app.services.auth.session_service import SessionService
 from app.core.config import settings
@@ -502,7 +502,3 @@ class AuthService:
             }
             for s in sessions
         ]
-
-
-def verify_token_hash(token: str, token_hash: str) -> bool:
-    return verify_password(token, token_hash)
