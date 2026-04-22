@@ -38,6 +38,20 @@ class Settings(BaseSettings):
     LLM_TEMPERATURE: float = 0.1
     LLM_MAX_TOKENS: int = 32000
 
+    JWT_SECRET_KEY: str = "dev-secret-key-change-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    JWT_REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
+
+    MAX_LOGIN_FAILURES: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+
+    CAPTCHA_EXPIRE_SECONDS: int = 60
+    CAPTCHA_ENABLED: bool = True
+
+    MFA_ENABLED: bool = False
+    MFA_REQUIRED: bool = False
+
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
