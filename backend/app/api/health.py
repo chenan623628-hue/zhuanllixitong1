@@ -13,7 +13,7 @@ from app.core.responses import create_success_response
 health_router = APIRouter()
 
 
-@health_router.get("", response_model=HealthResponse)
+@health_router.get("/health", response_model=HealthResponse)
 async def health_check():
     return HealthResponse(
         status="healthy",
@@ -34,7 +34,7 @@ async def readiness_check():
     )
 
 
-@health_router.get("/status")
+@health_router.get("/health/status")
 async def status_check():
     return create_success_response(
         data={
