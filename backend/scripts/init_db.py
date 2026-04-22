@@ -5,13 +5,12 @@
 创建数据库表并插入默认管理员用户
 """
 from datetime import datetime, timezone
-from passlib.context import CryptContext
+
+import bcrypt
 from sqlalchemy import create_engine, text
 
 from app.core.config import settings
 from app.models.base import Base
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_PASSWORD = "admin123"
@@ -19,7 +18,10 @@ DEFAULT_ADMIN_EMAIL = "admin@example.com"
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    password_bytes = password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def init_database():
