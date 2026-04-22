@@ -1,7 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Node.js
 node_modules/
 .pnpm-store/
 dist/
 build/
+
+# Environment
 .env
+.env.local
+.env.*.local
+
+# Cache
 .cache/
 .workbuddy/
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+uploads/
