@@ -335,26 +335,68 @@ class RoleService:
         
         self.db.commit()
     
+    def _update_primary_role_and_user_field(self, user_id: int, exclude_role_id: int | None = None) -> None:
+        """
+        内部辅助方法：当主角色发生变化时，重新确定主角色并更新 users.role 字段
+        
+        Args:
+            user_id: 用户ID
+            exclude_role_id: 可选，排除的角色ID（用于刚刚移除/降级的角色）
+        """
+        remaining_primary = self.db.query(UserRole).filter(
+            UserRole.user_id == user_id,
+            UserRole.is_primary == True
+        )
+        if exclude_role_id is not None:
+            remaining_primary = remaining_primary.filter(UserRole.role_id != exclude_role_id)
+        remaining_primary = remaining_primary.first()
+        
+        if remaining_primary:
+            new_role = self.db.query(Role).filter(
+                Role.id == remaining_primary.role_id
+            ).first()
+            if new_role:
+                self.db.query(User).filter(
+                    User.id == user_id
+                ).update({"role": new_role.code}, synchronize_session=False)
+                self.db.commit()
+                return
+        
+        other_roles = self.db.query(UserRole).filter(
+            UserRole.user_id == user_id
+        )
+        if exclude_role_id is not None:
+            other_roles = other_roles.filter(UserRole.role_id != exclude_role_id)
+        other_roles = other_roles.first()
+        
+        if other_roles:
+            other_role = self.db.query(Role).filter(
+                Role.id == other_roles.role_id
+            ).first()
+            if other_role:
+                other_roles.is_primary = True
+                self.db.query(User).filter(
+                    User.id == user_id
+                ).update({"role": other_role.code}, synchronize_session=False)
+                self.db.commit()
+                return
+        
+        self.db.query(User).filter(
+            User.id == user_id
+        ).update({"role": "user"}, synchronize_session=False)
+        self.db.commit()
+    
     def assign_role_to_user(self, user_id: int, role_id: int, is_primary: bool = False) -> bool:
         """
         为用户分配角色
-        注意：如果设置 is_primary=True，会自动清除该用户其他角色的 is_primary 标记
-        并且同步更新 users.role 字段
+        
+        注意：
+        - 如果设置 is_primary=True，会自动清除该用户其他角色的 is_primary 标记，并同步更新 users.role
+        - 如果将现有主角色设置为 is_primary=False，需要重新确定主角色并同步更新 users.role
         """
         role = self.db.query(Role).filter(Role.id == role_id).first()
         if not role:
             return False
-        
-        if is_primary:
-            self.db.query(UserRole).filter(
-                UserRole.user_id == user_id,
-                UserRole.role_id != role_id,
-                UserRole.is_primary == True
-            ).update({"is_primary": False}, synchronize_session=False)
-            
-            self.db.query(User).filter(
-                User.id == user_id
-            ).update({"role": role.code}, synchronize_session=False)
         
         existing = self.db.query(UserRole).filter(
             UserRole.user_id == user_id,
@@ -362,9 +404,35 @@ class RoleService:
         ).first()
         
         if existing:
+            was_primary = existing.is_primary
             existing.is_primary = is_primary
+            
+            if is_primary:
+                self.db.query(UserRole).filter(
+                    UserRole.user_id == user_id,
+                    UserRole.role_id != role_id,
+                    UserRole.is_primary == True
+                ).update({"is_primary": False}, synchronize_session=False)
+                
+                self.db.query(User).filter(
+                    User.id == user_id
+                ).update({"role": role.code}, synchronize_session=False)
+            elif was_primary:
+                self._update_primary_role_and_user_field(user_id, exclude_role_id=role_id)
+                return True
+            
             self.db.commit()
             return True
+        
+        if is_primary:
+            self.db.query(UserRole).filter(
+                UserRole.user_id == user_id,
+                UserRole.is_primary == True
+            ).update({"is_primary": False}, synchronize_session=False)
+            
+            self.db.query(User).filter(
+                User.id == user_id
+            ).update({"role": role.code}, synchronize_session=False)
         
         user_role = UserRole(
             user_id=user_id,
@@ -372,13 +440,26 @@ class RoleService:
             is_primary=is_primary,
         )
         self.db.add(user_role)
+        
+        if not is_primary:
+            has_any_primary = self.db.query(UserRole).filter(
+                UserRole.user_id == user_id,
+                UserRole.is_primary == True
+            ).first()
+            
+            if not has_any_primary:
+                user_role.is_primary = True
+                self.db.query(User).filter(
+                    User.id == user_id
+                ).update({"role": role.code}, synchronize_session=False)
+        
         self.db.commit()
         return True
     
     def remove_role_from_user(self, user_id: int, role_id: int) -> bool:
         """
         移除用户角色
-        注意：如果移除的是主角色，需要将 users.role 设置为其他主角色或默认值
+        注意：如果移除的是主角色，需要重新确定主角色并同步更新 users.role
         """
         user_role = self.db.query(UserRole).filter(
             UserRole.user_id == user_id,
@@ -394,39 +475,7 @@ class RoleService:
         self.db.commit()
         
         if was_primary:
-            remaining_primary = self.db.query(UserRole).filter(
-                UserRole.user_id == user_id,
-                UserRole.is_primary == True
-            ).first()
-            
-            if remaining_primary:
-                new_role = self.db.query(Role).filter(
-                    Role.id == remaining_primary.role_id
-                ).first()
-                if new_role:
-                    self.db.query(User).filter(
-                        User.id == user_id
-                    ).update({"role": new_role.code}, synchronize_session=False)
-                    self.db.commit()
-            else:
-                other_roles = self.db.query(UserRole).filter(
-                    UserRole.user_id == user_id
-                ).first()
-                if other_roles:
-                    other_role = self.db.query(Role).filter(
-                        Role.id == other_roles.role_id
-                    ).first()
-                    if other_role:
-                        other_roles.is_primary = True
-                        self.db.query(User).filter(
-                            User.id == user_id
-                        ).update({"role": other_role.code}, synchronize_session=False)
-                        self.db.commit()
-                else:
-                    self.db.query(User).filter(
-                        User.id == user_id
-                    ).update({"role": "user"}, synchronize_session=False)
-                    self.db.commit()
+            self._update_primary_role_and_user_field(user_id, exclude_role_id=role_id)
         
         return True
 
