@@ -29,6 +29,8 @@ from app.models.rbac import (
     Role, 
     Permission, 
     Menu,
+    RolePermission,
+    UserRole,
     BuiltinRoles,
     BuiltinPermissions,
     RolePermissionMatrix,

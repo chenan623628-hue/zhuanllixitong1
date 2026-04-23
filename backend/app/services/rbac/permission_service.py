@@ -338,7 +338,15 @@ class RoleService:
     def assign_role_to_user(self, user_id: int, role_id: int, is_primary: bool = False) -> bool:
         """
         为用户分配角色
+        注意：如果设置 is_primary=True，会自动清除该用户其他角色的 is_primary 标记
         """
+        if is_primary:
+            self.db.query(UserRole).filter(
+                UserRole.user_id == user_id,
+                UserRole.role_id != role_id,
+                UserRole.is_primary == True
+            ).update({"is_primary": False}, synchronize_session=False)
+        
         existing = self.db.query(UserRole).filter(
             UserRole.user_id == user_id,
             UserRole.role_id == role_id

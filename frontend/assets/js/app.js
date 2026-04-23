@@ -48,7 +48,8 @@ async function loadRbacDataAndRender() {
     const rbacData = await rbacService.loadRbacData();
     
     const navContainer = document.getElementById('nav-container');
-    if (navContainer) {
+    
+    if (navContainer && rbacData.menus && rbacData.menus.length > 0) {
       rbacService.renderMenuItems(rbacData.menus, navContainer);
     }
     
@@ -66,7 +67,7 @@ async function loadRbacDataAndRender() {
     console.log('RBAC data loaded:', {
       role: rbacData.role,
       permissions: rbacData.permissions.length,
-      menus: rbacData.menus.length,
+      menus: rbacData.menus ? rbacData.menus.length : 0,
     });
   } catch (error) {
     console.error('Failed to load RBAC data:', error);
