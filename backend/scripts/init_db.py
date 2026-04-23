@@ -4,6 +4,7 @@
 
 创建数据库表并插入默认管理员用户
 """
+import sys
 from datetime import datetime, timezone
 
 import bcrypt
@@ -17,6 +18,26 @@ DEFAULT_ADMIN_PASSWORD = "admin123"
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 
 
+def safe_print(*args, **kwargs):
+    """
+    安全打印函数，避免Windows GBK控制台Unicode编码错误
+    """
+    try:
+        print(*args, **kwargs)
+    except UnicodeEncodeError:
+        try:
+            encoding = sys.stdout.encoding or "utf-8"
+            new_args = []
+            for arg in args:
+                if isinstance(arg, str):
+                    new_args.append(arg.encode(encoding, errors="replace").decode(encoding))
+                else:
+                    new_args.append(arg)
+            print(*new_args, **kwargs)
+        except:
+            pass
+
+
 def get_password_hash(password: str) -> str:
     password_bytes = password.encode("utf-8")
     salt = bcrypt.gensalt()
@@ -25,9 +46,9 @@ def get_password_hash(password: str) -> str:
 
 
 def init_database():
-    print("=" * 60)
-    print("专利-标准比对系统 - 数据库初始化")
-    print("=" * 60)
+    safe_print("=" * 60)
+    safe_print("专利-标准比对系统 - 数据库初始化")
+    safe_print("=" * 60)
     
     db_url = settings.DATABASE_URL
     connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
@@ -39,14 +60,14 @@ def init_database():
         pool_pre_ping=True,
     )
     
-    print(f"\n数据库连接: {db_url}")
-    print("\n[1/4] 创建数据库表...")
+    safe_print(f"\n数据库连接: {db_url}")
+    safe_print("\n[1/4] 创建数据库表...")
     
     Base.metadata.create_all(bind=engine)
     
-    print("✓ 表创建完成")
+    safe_print("[OK] 表创建完成")
     
-    print("\n[2/4] 检查默认管理员用户...")
+    safe_print("\n[2/4] 检查默认管理员用户...")
     
     with engine.connect() as conn:
         result = conn.execute(
@@ -56,9 +77,9 @@ def init_database():
         existing_user = result.fetchone()
     
     if existing_user:
-        print(f"✓ 管理员用户 '{DEFAULT_ADMIN_USERNAME}' 已存在")
+        safe_print(f"[OK] 管理员用户 '{DEFAULT_ADMIN_USERNAME}' 已存在")
     else:
-        print("[3/4] 创建默认管理员用户...")
+        safe_print("[3/4] 创建默认管理员用户...")
         
         password_hash = get_password_hash(DEFAULT_ADMIN_PASSWORD)
         now = datetime.now(timezone.utc)
@@ -90,15 +111,15 @@ def init_database():
                 }
             )
         
-        print(f"✓ 管理员用户 '{DEFAULT_ADMIN_USERNAME}' 创建成功")
+        safe_print(f"[OK] 管理员用户 '{DEFAULT_ADMIN_USERNAME}' 创建成功")
     
-    print("\n[4/4] 数据库初始化完成")
-    print("=" * 60)
-    print("\n默认管理员账号:")
-    print(f"  用户名: {DEFAULT_ADMIN_USERNAME}")
-    print(f"  密码: {DEFAULT_ADMIN_PASSWORD}")
-    print("\n⚠️  生产环境请立即修改默认密码！")
-    print("\n=" * 60)
+    safe_print("\n[4/4] 数据库初始化完成")
+    safe_print("=" * 60)
+    safe_print("\n默认管理员账号:")
+    safe_print(f"  用户名: {DEFAULT_ADMIN_USERNAME}")
+    safe_print(f"  密码: {DEFAULT_ADMIN_PASSWORD}")
+    safe_print("\n[WARNING] 生产环境请立即修改默认密码！")
+    safe_print("\n" + "=" * 60)
     
     engine.dispose()
 
