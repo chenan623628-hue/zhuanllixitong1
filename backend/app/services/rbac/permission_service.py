@@ -165,15 +165,27 @@ class MenuService:
         获取用户可见的菜单树
         注意：只从启用的角色（is_active=True）获取菜单
         """
-        active_roles = self.get_user_roles(user_id)
+        user_roles = self.db.query(UserRole).filter(
+            UserRole.user_id == user_id
+        ).all()
+        
+        if not user_roles:
+            return []
+        
+        role_ids = [ur.role_id for ur in user_roles]
+        
+        active_roles = self.db.query(Role).filter(
+            Role.id.in_(role_ids),
+            Role.is_active == True
+        ).all()
         
         if not active_roles:
             return []
         
-        role_ids = [r.id for r in active_roles]
+        active_role_ids = [r.id for r in active_roles]
         
         role_menus = self.db.query(RoleMenu).filter(
-            RoleMenu.role_id.in_(role_ids)
+            RoleMenu.role_id.in_(active_role_ids)
         ).all()
         
         if not role_menus:
@@ -506,6 +518,7 @@ class DataScopeService:
     def get_user_data_scope(self, user_id: int, entity_type: str) -> str:
         """
         获取用户的数据范围
+        注意：只从启用的角色（is_active=True）获取数据范围
         """
         user_roles = self.db.query(UserRole).filter(
             UserRole.user_id == user_id
@@ -516,11 +529,15 @@ class DataScopeService:
         
         role_ids = [ur.role_id for ur in user_roles]
         
-        scopes = []
-        for role_id in role_ids:
-            role = self.db.query(Role).filter(Role.id == role_id).first()
-            if role:
-                scopes.append(role.data_scope)
+        active_roles = self.db.query(Role).filter(
+            Role.id.in_(role_ids),
+            Role.is_active == True
+        ).all()
+        
+        if not active_roles:
+            return "self"
+        
+        scopes = [r.data_scope for r in active_roles]
         
         priority = ["all", "dept", "self"]
         for s in priority:
