@@ -339,9 +339,12 @@ class RoleService:
         """
         内部辅助方法：当主角色发生变化时，重新确定主角色并更新 users.role 字段
         
+        核心原则：用户必须始终有且只有一个主角色
+        
         Args:
             user_id: 用户ID
             exclude_role_id: 可选，排除的角色ID（用于刚刚移除/降级的角色）
+                           注意：如果这是用户唯一的角色，不会真的排除它
         """
         remaining_primary = self.db.query(UserRole).filter(
             UserRole.user_id == user_id,
@@ -380,6 +383,24 @@ class RoleService:
                 ).update({"role": other_role.code}, synchronize_session=False)
                 self.db.commit()
                 return
+        
+        if exclude_role_id is not None:
+            excluded_role_record = self.db.query(UserRole).filter(
+                UserRole.user_id == user_id,
+                UserRole.role_id == exclude_role_id
+            ).first()
+            
+            if excluded_role_record:
+                excluded_role_record.is_primary = True
+                excluded_role = self.db.query(Role).filter(
+                    Role.id == excluded_role_record.role_id
+                ).first()
+                if excluded_role:
+                    self.db.query(User).filter(
+                        User.id == user_id
+                    ).update({"role": excluded_role.code}, synchronize_session=False)
+                    self.db.commit()
+                    return
         
         self.db.query(User).filter(
             User.id == user_id
