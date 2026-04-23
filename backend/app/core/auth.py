@@ -119,6 +119,8 @@ async def get_current_user(
             message="账户已被锁定"
         )
     
+    effective_role_code = _get_effective_role_code(db, user)
+    
     perm_service = PermissionService(db)
     permissions = perm_service.get_user_permissions(user_id)
     
@@ -126,9 +128,64 @@ async def get_current_user(
         id=user.id,
         username=user.username,
         email=user.email,
-        role=user.role,
+        role=effective_role_code,
         permissions=permissions,
     )
+
+
+def _get_effective_role_code(db: Session, user: User) -> str:
+    """
+    获取用户的有效角色 code
+    注意：只返回启用的角色（is_active=True）
+    
+    优先级：
+    1. 检查 users.role 对应的角色是否启用
+    2. 如果禁用，从 user_roles 找启用的主角色
+    3. 如果没有，找任意启用的角色
+    4. 都没有，返回默认的 "user"
+    """
+    from app.models.rbac import Role, UserRole
+    
+    if user.role:
+        role = db.query(Role).filter(
+            Role.code == user.role,
+            Role.is_active == True
+        ).first()
+        if role:
+            return role.code
+    
+    primary_user_role = db.query(UserRole).join(
+        Role, Role.id == UserRole.role_id
+    ).filter(
+        UserRole.user_id == user.id,
+        UserRole.is_primary == True,
+        Role.is_active == True
+    ).first()
+    
+    if primary_user_role:
+        role = db.query(Role).filter(
+            Role.id == primary_user_role.role_id,
+            Role.is_active == True
+        ).first()
+        if role:
+            return role.code
+    
+    any_user_role = db.query(UserRole).join(
+        Role, Role.id == UserRole.role_id
+    ).filter(
+        UserRole.user_id == user.id,
+        Role.is_active == True
+    ).first()
+    
+    if any_user_role:
+        role = db.query(Role).filter(
+            Role.id == any_user_role.role_id,
+            Role.is_active == True
+        ).first()
+        if role:
+            return role.code
+    
+    return "user"
 
 
 async def get_current_user_optional(

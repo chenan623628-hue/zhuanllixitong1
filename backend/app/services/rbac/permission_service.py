@@ -26,15 +26,14 @@ class PermissionService:
     def get_user_permissions(self, user_id: int) -> list[str]:
         """
         获取用户的所有权限码
+        注意：只从启用的角色（is_active=True）获取权限
         """
-        user_roles = self.db.query(UserRole).filter(
-            UserRole.user_id == user_id
-        ).all()
+        active_roles = self.get_user_roles(user_id)
         
-        if not user_roles:
+        if not active_roles:
             return []
         
-        role_ids = [ur.role_id for ur in user_roles]
+        role_ids = [r.id for r in active_roles]
         
         role_permissions = self.db.query(RolePermission).filter(
             RolePermission.role_id.in_(role_ids)
@@ -164,15 +163,14 @@ class MenuService:
     def get_user_menus(self, user_id: int) -> list[Menu]:
         """
         获取用户可见的菜单树
+        注意：只从启用的角色（is_active=True）获取菜单
         """
-        user_roles = self.db.query(UserRole).filter(
-            UserRole.user_id == user_id
-        ).all()
+        active_roles = self.get_user_roles(user_id)
         
-        if not user_roles:
+        if not active_roles:
             return []
         
-        role_ids = [ur.role_id for ur in user_roles]
+        role_ids = [r.id for r in active_roles]
         
         role_menus = self.db.query(RoleMenu).filter(
             RoleMenu.role_id.in_(role_ids)

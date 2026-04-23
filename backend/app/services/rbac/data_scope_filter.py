@@ -55,41 +55,54 @@ class DataScopeFilter:
         self._dept_id = None
     
     def _get_user_role(self) -> Role | None:
-        """获取用户主角色"""
+        """获取用户主角色
+        注意：只返回启用的角色（is_active=True）
+        """
         if self._user_role is not None:
             return self._user_role
         
         user = self.db.query(User).filter(User.id == self.current_user_id).first()
         if user:
             role = self.db.query(Role).filter(
-                Role.code == user.role
+                Role.code == user.role,
+                Role.is_active == True
             ).first()
             if role:
                 self._user_role = role
                 return role
         
-        user_role = self.db.query(UserRole).filter(
+        user_role = self.db.query(UserRole).join(
+            Role, Role.id == UserRole.role_id
+        ).filter(
             UserRole.user_id == self.current_user_id,
-            UserRole.is_primary == True
+            UserRole.is_primary == True,
+            Role.is_active == True
         ).first()
         
         if user_role:
             role = self.db.query(Role).filter(
-                Role.id == user_role.role_id
+                Role.id == user_role.role_id,
+                Role.is_active == True
             ).first()
-            self._user_role = role
-            return role
+            if role:
+                self._user_role = role
+                return role
         
-        user_roles = self.db.query(UserRole).filter(
-            UserRole.user_id == self.current_user_id
+        user_roles = self.db.query(UserRole).join(
+            Role, Role.id == UserRole.role_id
+        ).filter(
+            UserRole.user_id == self.current_user_id,
+            Role.is_active == True
         ).first()
         
         if user_roles:
             role = self.db.query(Role).filter(
-                Role.id == user_roles.role_id
+                Role.id == user_roles.role_id,
+                Role.is_active == True
             ).first()
-            self._user_role = role
-            return role
+            if role:
+                self._user_role = role
+                return role
         
         return None
     
