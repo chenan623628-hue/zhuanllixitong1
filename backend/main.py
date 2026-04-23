@@ -38,7 +38,7 @@ app.add_middleware(
 add_tracing_middleware(app)
 add_exception_handlers(app)
 
-app.include_router(health_router, prefix="/health", tags=["health"])
+app.include_router(health_router, tags=["health"])
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
