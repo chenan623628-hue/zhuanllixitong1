@@ -1,36 +1,29 @@
-@echo off
-echo ========================================
-echo 专利-标准比对系统 V1.0 - 后端启动脚本
-echo ========================================
-echo.
+"""
+专利-标准比对系统 V1.0
+M01 工程基线模块 - Worker 入口
+"""
+import asyncio
+import logging
 
-set "SCRIPT_DIR=%~dp0"
-cd /d "%SCRIPT_DIR%\backend"
-
-echo [1/4] 检查 Python 环境...
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo [错误] 未找到 Python，请先安装 Python 3.10+
-    pause
-    exit /b 1
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 
-echo [2/4] 创建虚拟环境...
-if not exist "venv" (
-    python -m venv venv
-)
+logger = logging.getLogger(__name__)
 
-echo [3/4] 激活虚拟环境并安装依赖...
-call venv\Scripts\activate.bat
-pip install -r requirements.txt -q
 
-echo [4/4] 启动服务...
-echo.
-echo 服务启动中...
-echo 访问地址: http://localhost:8000
-echo API 文档: http://localhost:8000/docs
-echo.
-echo 按 Ctrl+C 停止服务
-echo.
+async def main():
+    logger.info("Worker 服务启动中...")
+    logger.info("专利-标准比对系统后台任务处理器")
+    logger.info("Worker 服务已就绪，等待任务...")
+    
+    while True:
+        await asyncio.sleep(1)
 
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Worker 服务已停止")
