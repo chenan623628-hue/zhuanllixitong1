@@ -6,9 +6,9 @@ RBAC服务层集成测试 - 角色禁用过滤逻辑
 import pytest
 
 
-class TestRoleDisabledFilterIntegration:
+class TestRoleDisabledFilter:
     """
-    角色禁用过滤集成测试
+    角色禁用过滤测试
     
     测试目标：
     - 验证禁用角色后，权限不再下发
@@ -19,13 +19,9 @@ class TestRoleDisabledFilterIntegration:
     def test_get_user_roles_filters_inactive(self, test_db, test_roles, test_user_roles):
         """
         测试：get_user_roles 应该过滤掉禁用的角色
-        
-        场景：
-        - 用户同时绑定了 system_admin(启用) 和 auditor(禁用)
-        - 调用 get_user_roles
-        - 预期：只返回 system_admin
         """
         from app.services.rbac import PermissionService
+        from app.models.rbac import Role
         
         test_roles[2].is_active = False
         test_db.commit()
@@ -88,8 +84,8 @@ class TestRoleDisabledFilterIntegration:
         
         场景：
         - system_admin 数据范围: all (启用)
-        - auditor 数据范围: self (禁用)
-        - 预期：返回 all
+        - auditor 数据范围: self (启用)
+        - 预期：返回 all (优先级最高)
         """
         from app.services.rbac import DataScopeService
         
@@ -137,7 +133,7 @@ class TestRoleDisabledFilterIntegration:
         assert scope == "self"
 
 
-class TestRoleDisabledFilterPermissions:
+class TestRoleDisabledPermissions:
     """
     角色禁用后的权限检查测试
     """

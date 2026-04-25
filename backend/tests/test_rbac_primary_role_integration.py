@@ -2,18 +2,22 @@
 RBAC服务层集成测试 - 主角色切换逻辑
 
 使用内存数据库进行真实测试
+
+测试数据说明 (来自 test_user_roles fixture):
+- 用户1: role_id=1(system_admin, 主), role_id=3(auditor, 非主)
+- 用户2: role_id=4(user, 主)
 """
 import pytest
 
 
-class TestPrimaryRoleSwitchIntegration:
+class TestPrimaryRoleSwitch:
     """
     主角色切换集成测试
     
     测试目标：
     - 设置新的主角色会自动清除其他主角色
     - 把唯一的主角色设为非主角色不会导致无主角色
-    - 主角色切换时同步更新 users.role 字段
+    - 移除主角色后自动选择新的主角色
     """
     
     def test_assign_new_primary_clears_others(self, test_db, test_roles, test_user_roles):
@@ -43,7 +47,7 @@ class TestPrimaryRoleSwitchIntegration:
         assert system_admin_role.is_primary is False
         assert auditor_role.is_primary is True
     
-    def test_assign_primary_to_new_role(self, test_db, test_roles):
+    def test_assign_primary_to_new_role(self, test_db, test_roles, test_user_roles):
         """
         测试：给用户分配新角色并设为主角色
         
@@ -54,10 +58,6 @@ class TestPrimaryRoleSwitchIntegration:
         """
         from app.services.rbac import RoleService
         from app.models.rbac import UserRole
-        
-        user_role = UserRole(id=4, user_id=2, role_id=4, is_primary=True)
-        test_db.add(user_role)
-        test_db.commit()
         
         service = RoleService(test_db)
         result = service.assign_role_to_user(user_id=2, role_id=1, is_primary=True)
@@ -108,10 +108,6 @@ class TestPrimaryRoleSwitchIntegration:
         """
         from app.services.rbac import RoleService
         from app.models.rbac import UserRole
-        
-        user_role = UserRole(id=4, user_id=2, role_id=4, is_primary=True)
-        test_db.add(user_role)
-        test_db.commit()
         
         service = RoleService(test_db)
         result = service.assign_role_to_user(user_id=2, role_id=4, is_primary=False)
@@ -196,3 +192,29 @@ class TestPrimaryRoleBoundary:
         
         assert len(user_roles) == 1
         assert user_roles[0].is_primary is True
+    
+    def test_assign_multiple_roles_sequentially(self, test_db, test_roles, test_user_roles):
+        """
+        测试：依次分配多个角色为主
+        
+        场景：
+        - 用户2当前：user(主)
+        - 分配 system_admin 为主 → user变非主
+        - 分配 auditor 为主 → system_admin变非主
+        - 预期：auditor 是唯一的主角色
+        """
+        from app.services.rbac import RoleService
+        from app.models.rbac import UserRole
+        
+        service = RoleService(test_db)
+        
+        service.assign_role_to_user(user_id=2, role_id=1, is_primary=True)
+        
+        service.assign_role_to_user(user_id=2, role_id=3, is_primary=True)
+        
+        user_roles = test_db.query(UserRole).filter(UserRole.user_id == 2).all()
+        
+        primary_roles = [r for r in user_roles if r.is_primary]
+        
+        assert len(primary_roles) == 1
+        assert primary_roles[0].role_id == 3
