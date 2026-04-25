@@ -663,8 +663,51 @@ class FileListManager {
   }
   
   async downloadFile(fileId) {
-    const token = authService.getToken();
-    window.open(`/api/v1/files/${fileId}/download?token=${token}`, '_blank');
+    try {
+      const response = await authService._fetch(`/api/v1/files/${fileId}/download`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`下载失败 (${response.status})`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = `download_${fileId}`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename\*=UTF-8''(.+)/i);
+        if (filenameMatch) {
+          try {
+            filename = decodeURIComponent(filenameMatch[1]);
+          } catch (e) {
+            filename = filenameMatch[1];
+          }
+        } else {
+          const simpleMatch = contentDisposition.match(/filename=["']?([^"';\n]+)["']?/i);
+          if (simpleMatch) {
+            filename = simpleMatch[1];
+          }
+        }
+      }
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('文件下载失败:', error);
+      alert('下载失败: ' + error.message);
+    }
   }
   
   async deleteFile(fileId) {

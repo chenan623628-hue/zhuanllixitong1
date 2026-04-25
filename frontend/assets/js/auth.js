@@ -266,17 +266,24 @@ class AuthService {
   async fetchJson(url, options = {}, autoRefresh = true) {
     const response = await this._fetch(url, options, autoRefresh);
     
+    let data;
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      return await response.json();
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        data = { code: -1, message: '响应格式错误', data: null };
+      }
     }
     
-    const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return { code: -1, message: '响应格式错误', data: null };
+    if (typeof data === 'object' && data !== null) {
+      data.success = data.code === 0;
     }
+    
+    return data;
   }
 }
 
