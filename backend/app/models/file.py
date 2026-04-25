@@ -109,8 +109,6 @@ class UploadSecurityEvent(BaseModel):
     __tablename__ = "upload_security_events"
     __table_args__ = (
         Index("ix_upload_security_events_event_time", "event_time"),
-        Index("ix_upload_security_events_file_id", "file_id"),
-        Index("ix_upload_security_events_event_type", "event_type"),
         {"comment": "上传安全事件表"},
     )
     

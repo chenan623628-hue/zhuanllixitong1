@@ -181,6 +181,10 @@ class AuthService {
     return !!this.accessToken;
   }
 
+  getToken() {
+    return this.accessToken;
+  }
+
   getUser() {
     if (this.user) {
       return this.user;
@@ -228,6 +232,45 @@ class AuthService {
     if (ua.includes('Android')) return 'Android';
     if (ua.includes('iPhone') || ua.includes('iPad')) return 'iOS';
     return 'Unknown';
+  }
+
+  async _fetch(url, options = {}, autoRefresh = true) {
+    const headers = options.headers || {};
+    
+    if (this.accessToken && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+    
+    let response = await fetch(url, {
+      ...options,
+      headers,
+    });
+    
+    if (autoRefresh && response.status === 401) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        headers['Authorization'] = `Bearer ${this.accessToken}`;
+        response = await fetch(url, {
+          ...options,
+          headers,
+        });
+      } else {
+        this.logout();
+        throw new Error('Authentication failed');
+      }
+    }
+    
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    
+    return response;
+  }
+
+  async fetchJson(url, options = {}, autoRefresh = true) {
+    const response = await this._fetch(url, options, autoRefresh);
+    return await response.json();
   }
 }
 

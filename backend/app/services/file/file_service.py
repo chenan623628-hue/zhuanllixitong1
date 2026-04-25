@@ -92,6 +92,88 @@ def _calculate_hash(file_obj: BinaryIO, algorithm: str = "sha256") -> str:
     return hash_obj.hexdigest()
 
 
+def _get_pdf_page_count(file_obj: BinaryIO) -> int | None:
+    try:
+        import re
+        
+        file_obj.seek(0)
+        content = file_obj.read(1024 * 1024)
+        
+        if not content.startswith(b"%PDF-"):
+            return None
+        
+        text = content.decode("latin-1", errors="ignore")
+        
+        count_match = re.search(r"/Count\s+(\d+)", text)
+        if count_match:
+            return int(count_match.group(1))
+        
+        pages_match = re.search(r"/Type\s*/Pages\s*/Count\s+(\d+)", text)
+        if pages_match:
+            return int(pages_match.group(1))
+        
+        return None
+    except Exception:
+        return None
+
+
+def _get_docx_page_count(file_obj: BinaryIO) -> int | None:
+    try:
+        import zipfile
+        import xml.etree.ElementTree as ET
+        
+        file_obj.seek(0)
+        
+        with zipfile.ZipFile(file_obj, "r") as zf:
+            if "docProps/app.xml" in zf.namelist():
+                app_xml = zf.read("docProps/app.xml")
+                root = ET.fromstring(app_xml)
+                
+                namespaces = {
+                    "": "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+                }
+                
+                pages_elem = root.find("Pages", namespaces)
+                if pages_elem is not None and pages_elem.text:
+                    return int(pages_elem.text)
+                
+                pages_elem_nons = root.find(".//Pages")
+                if pages_elem_nons is not None and pages_elem_nons.text:
+                    return int(pages_elem_nons.text)
+            
+            return None
+    except Exception:
+        return None
+
+
+def _get_doc_page_count(file_obj: BinaryIO) -> int | None:
+    try:
+        import struct
+        
+        file_obj.seek(0)
+        header = file_obj.read(512)
+        
+        if not header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            return None
+        
+        return None
+    except Exception:
+        return None
+
+
+def _get_page_count(file_obj: BinaryIO, file_extension: str) -> int | None:
+    ext = file_extension.lower()
+    
+    if ext == ".pdf":
+        return _get_pdf_page_count(file_obj)
+    elif ext == ".docx":
+        return _get_docx_page_count(file_obj)
+    elif ext == ".doc":
+        return _get_doc_page_count(file_obj)
+    
+    return None
+
+
 class FileService:
     def __init__(self, db: Session):
         self.db = db
@@ -206,15 +288,59 @@ class FileService:
         
         file_hash = _calculate_hash(file_obj)
         
+        page_count = _get_page_count(file_obj, validation.file_extension or "")
+        
+        page_validation = self.validate_page_count(page_count)
+        if not page_validation.valid:
+            self._log_security_event(
+                event_type=SecurityEventType.FILE_PAGE_CHECK,
+                file_name=sanitized_name,
+                file_size=file_size,
+                user_id=upload_context.user_id,
+                ip_address=upload_context.ip_address,
+                user_agent=upload_context.user_agent,
+                severity="warning",
+                check_type="page_count",
+                check_result="failed",
+                block_reason=page_validation.error_message,
+                is_blocked=True,
+            )
+            raise FileException(
+                code=page_validation.error_code or ErrorCode.FILE_TOO_MANY_PAGES,
+                message=page_validation.error_message
+            )
+        
         existing_file = self.db.query(File).filter(
             File.file_hash == file_hash,
             File.is_deleted == False
         ).first()
         
+        subdir = self._get_upload_subdir(upload_context.file_type)
+        stored_name = self._generate_stored_name(sanitized_name, validation.file_extension or "")
+        
         if existing_file:
+            file_record = File(
+                original_name=sanitized_name,
+                stored_name=existing_file.stored_name,
+                file_path=existing_file.file_path,
+                file_type=upload_context.file_type,
+                file_category=validation.file_category,
+                file_size=file_size,
+                file_hash=file_hash,
+                mime_type=validation.mime_type,
+                file_extension=validation.file_extension,
+                page_count=page_count,
+                status=FileStatus.UPLOADED,
+                scan_status=ScanStatus.PENDING,
+                upload_user_id=upload_context.user_id,
+                upload_ip=upload_context.ip_address,
+                upload_source=upload_context.upload_source,
+                task_id=upload_context.task_id,
+            )
+            
             self._log_security_event(
                 event_type=SecurityEventType.FILE_HASH_DUPLICATE,
-                file_id=existing_file.file_id,
+                file_id=file_record.file_id,
                 file_name=sanitized_name,
                 file_size=file_size,
                 file_hash=file_hash,
@@ -224,39 +350,37 @@ class FileService:
                 severity="info",
                 check_type="hash",
                 check_result="passed",
+                check_details={"duplicate_of_file_id": existing_file.file_id},
             )
-            return existing_file
-        
-        subdir = self._get_upload_subdir(upload_context.file_type)
-        stored_name = self._generate_stored_name(sanitized_name, validation.file_extension or "")
-        
-        relative_path = os.path.join(subdir, stored_name)
-        full_path = os.path.join(settings.UPLOAD_DIR, relative_path)
-        
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
-        with open(full_path, "wb") as f:
-            file_obj.seek(0)
-            while chunk := file_obj.read(8192):
-                f.write(chunk)
-        
-        file_record = File(
-            original_name=sanitized_name,
-            stored_name=stored_name,
-            file_path=relative_path,
-            file_type=upload_context.file_type,
-            file_category=validation.file_category,
-            file_size=file_size,
-            file_hash=file_hash,
-            mime_type=validation.mime_type,
-            file_extension=validation.file_extension,
-            status=FileStatus.UPLOADED,
-            scan_status=ScanStatus.PENDING,
-            upload_user_id=upload_context.user_id,
-            upload_ip=upload_context.ip_address,
-            upload_source=upload_context.upload_source,
-            task_id=upload_context.task_id,
-        )
+        else:
+            relative_path = os.path.join(subdir, stored_name)
+            full_path = os.path.join(settings.UPLOAD_DIR, relative_path)
+            
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            
+            with open(full_path, "wb") as f:
+                file_obj.seek(0)
+                while chunk := file_obj.read(8192):
+                    f.write(chunk)
+            
+            file_record = File(
+                original_name=sanitized_name,
+                stored_name=stored_name,
+                file_path=relative_path,
+                file_type=upload_context.file_type,
+                file_category=validation.file_category,
+                file_size=file_size,
+                file_hash=file_hash,
+                mime_type=validation.mime_type,
+                file_extension=validation.file_extension,
+                page_count=page_count,
+                status=FileStatus.UPLOADED,
+                scan_status=ScanStatus.PENDING,
+                upload_user_id=upload_context.user_id,
+                upload_ip=upload_context.ip_address,
+                upload_source=upload_context.upload_source,
+                task_id=upload_context.task_id,
+            )
         
         self.db.add(file_record)
         self.db.commit()

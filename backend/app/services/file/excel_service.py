@@ -57,8 +57,11 @@ class ExcelService:
             import openpyxl
             from openpyxl.utils import get_column_letter
         except ImportError:
-            logger.warning("openpyxl not installed, using mock Excel preview")
-            return self._mock_preview_excel(file_path, max_rows, require_headers)
+            logger.error("openpyxl not installed, cannot process Excel files")
+            raise FileException(
+                code=ErrorCode.FILE_PARSE_ERROR,
+                message="Excel 处理库未安装，请联系管理员"
+            )
         
         try:
             wb = openpyxl.load_workbook(
@@ -239,8 +242,11 @@ class ExcelService:
         try:
             import openpyxl
         except ImportError:
-            logger.warning("openpyxl not installed, returning empty data")
-            return []
+            logger.error("openpyxl not installed, cannot process Excel files")
+            raise FileException(
+                code=ErrorCode.FILE_PARSE_ERROR,
+                message="Excel 处理库未安装，请联系管理员"
+            )
         
         try:
             wb = openpyxl.load_workbook(
@@ -291,13 +297,11 @@ class ExcelService:
         try:
             import openpyxl
         except ImportError:
-            return {
-                "worksheets": [],
-                "active_sheet": None,
-                "total_rows": 0,
-                "total_columns": 0,
-                "openpyxl_available": False,
-            }
+            logger.error("openpyxl not installed, cannot process Excel files")
+            raise FileException(
+                code=ErrorCode.FILE_PARSE_ERROR,
+                message="Excel 处理库未安装，请联系管理员"
+            )
         
         try:
             wb = openpyxl.load_workbook(

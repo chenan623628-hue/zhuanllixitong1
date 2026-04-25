@@ -70,6 +70,11 @@ def get_token_from_request(request: Request) -> str | None:
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header[7:]
+    
+    token = request.query_params.get("token")
+    if token:
+        return token
+    
     return None
 
 

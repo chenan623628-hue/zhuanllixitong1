@@ -266,10 +266,102 @@ class SecurityService:
         return file_record.file_extension.lower() in exec_extensions
     
     def _check_script_patterns(self, file_record: File) -> bool:
-        return False
+        if not file_record.file_path:
+            return False
+        
+        from app.services.file.file_service import FileService
+        from app.core.config import settings
+        import os
+        
+        full_path = os.path.join(settings.UPLOAD_DIR, file_record.file_path)
+        
+        if not os.path.exists(full_path):
+            return False
+        
+        script_patterns = [
+            b"<script",
+            b"javascript:",
+            b"vbscript:",
+            b"eval(",
+            b"exec(",
+            b"system(",
+            b"shell_exec(",
+            b"passthru(",
+            b"proc_open(",
+            b"popen(",
+            b"curl_exec",
+            b"file_get_contents(",
+            b"<?php",
+            b"<%",
+            b"<%=",
+            b"Function ",
+            b"Sub ",
+            b"On Error Resume",
+            b"document.cookie",
+            b"document.write",
+            b"window.location",
+            b"innerHTML",
+            b"outerHTML",
+        ]
+        
+        try:
+            with open(full_path, "rb") as f:
+                content = f.read(1024 * 1024)
+                
+                for pattern in script_patterns:
+                    if pattern in content:
+                        return True
+                
+                text_content = content.decode("utf-8", errors="ignore").lower()
+                
+                if "script" in text_content and ("function" in text_content or "var" in text_content):
+                    if text_content.count(";") > 5 and text_content.count("{") > 2:
+                        return True
+                        
+                return False
+        except Exception:
+            return False
     
     def _check_suspicious_headers(self, file_record: File) -> bool:
-        return False
+        if not file_record.file_path:
+            return False
+        
+        from app.core.config import settings
+        import os
+        
+        full_path = os.path.join(settings.UPLOAD_DIR, file_record.file_path)
+        
+        if not os.path.exists(full_path):
+            return False
+        
+        suspicious_headers = [
+            b"MZ",
+            b"PE\x00\x00",
+            b"\x7fELF",
+            b"\xca\xfe\xba\xbe",
+            b"\x50\x4b\x03\x04",
+        ]
+        
+        try:
+            with open(full_path, "rb") as f:
+                header = f.read(256)
+                
+                for suspicious_header in suspicious_headers:
+                    if header.startswith(suspicious_header):
+                        if file_record.file_extension and file_record.file_extension.lower() not in [".zip", ".docx", ".xlsx", ".docm", ".xlsm"]:
+                            return True
+                        
+                if file_record.file_extension and file_record.file_extension.lower() in [".pdf"]:
+                    if not header.startswith(b"%PDF-"):
+                        return True
+                        
+                if file_record.file_extension and file_record.file_extension.lower() in [".doc", ".docx"]:
+                    if not (header.startswith(b"\xd0\xcf\x11\xe0") or header.startswith(b"\x50\x4b\x03\x04")):
+                        return True
+                        
+                return False
+        except Exception:
+            return False
     
     def _create_blocked_result(
         self,
