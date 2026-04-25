@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    """返回 naive UTC 时间，与数据库 DateTime 列兼容"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AuthService:

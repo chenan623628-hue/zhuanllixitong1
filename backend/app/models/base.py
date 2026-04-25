@@ -5,17 +5,19 @@ M01 工程基线模块 - 数据库基础模型
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Integer
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
+from sqlalchemy.orm import DeclarativeBase
 
 
 def _utcnow() -> datetime:
     """
-    返回当前 timezone-aware UTC 时间
-    替代已弃用的 datetime.utcnow()
+    返回 naive UTC 时间（无时区信息）
+    用于与数据库 DateTime 列（无时区）兼容
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+class Base(DeclarativeBase):
+    pass
 
 
 class TimestampMixin:

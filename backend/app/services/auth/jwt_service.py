@@ -11,7 +11,8 @@ from app.core.config import settings
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    """返回 naive UTC 时间，与 JWT 标准兼容"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def create_access_token(subject: int | str, expires_delta: timedelta | None = None) -> str:

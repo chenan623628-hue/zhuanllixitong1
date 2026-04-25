@@ -8,7 +8,8 @@ from app.models.base import BaseModel
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    """返回 naive UTC 时间"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Session(BaseModel):
