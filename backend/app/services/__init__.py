@@ -1,6 +1,6 @@
 """
 专利-标准比对系统 V1.0
-M02 认证与会话模块 + M03 RBAC模块 - 服务包
+M02 认证与会话模块 + M03 RBAC模块 + M04 文件上传模块 - 服务包
 """
 from app.services.auth import (
     hash_password,
@@ -25,6 +25,17 @@ from app.services.rbac import (
     EntityType,
     create_data_scope_filter,
 )
+from app.services.file import (
+    FileService,
+    UploadContext,
+    FileValidationResult,
+    SecurityService,
+    ScanResult,
+    SecurityCheckResult,
+    ExcelService,
+    ExcelPreviewResult,
+    ExcelValidationError,
+)
 
 __all__ = [
     "hash_password",
@@ -46,4 +57,13 @@ __all__ = [
     "DataScopeType",
     "EntityType",
     "create_data_scope_filter",
+    "FileService",
+    "UploadContext",
+    "FileValidationResult",
+    "SecurityService",
+    "ScanResult",
+    "SecurityCheckResult",
+    "ExcelService",
+    "ExcelPreviewResult",
+    "ExcelValidationError",
 ]
