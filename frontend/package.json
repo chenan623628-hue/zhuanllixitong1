@@ -1,102 +1,17 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>专利-标准比对系统</title>
-    <link rel="stylesheet" href="/assets/styles/tokens.css">
-    <link rel="stylesheet" href="/assets/styles/components.css">
-    <link rel="stylesheet" href="/assets/styles/layout.css">
-</head>
-<body>
-    <div id="app">
-        <header class="app-header">
-            <div class="header-content">
-                <div class="logo">
-                    <span class="logo-icon">⚖️</span>
-                    <span class="logo-text">专利-标准比对系统</span>
-                </div>
-                <nav class="main-nav">
-                    <a href="#/" class="nav-item active">首页</a>
-                    <a href="#/tasks" class="nav-item">任务管理</a>
-                    <a href="#/files" class="nav-item">文件管理</a>
-                    <a href="#/reports" class="nav-item">报告中心</a>
-                    <a href="#/rules" class="nav-item">规则模板</a>
-                    <a href="#/terms" class="nav-item">术语库</a>
-                    <a href="#/admin" class="nav-item">系统管理</a>
-                </nav>
-                <div class="header-actions">
-                    <div class="user-dropdown">
-                        <span class="user-avatar">管</span>
-                        <span class="user-name">管理员</span>
-                    </div>
-                </div>
-            </div>
-        </header>
-        
-        <main class="app-main">
-            <div class="main-content">
-                <div id="page-content">
-                    <div class="welcome-section">
-                        <h1 class="page-title">欢迎使用专利-标准比对系统</h1>
-                        <p class="page-subtitle">V1.0 核心版 - 工程基线模块已就绪</p>
-                        
-                        <div class="dashboard-cards">
-                            <div class="card stat-card">
-                                <div class="card-icon">📁</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">文件总数</div>
-                                </div>
-                            </div>
-                            <div class="card stat-card">
-                                <div class="card-icon">📋</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">比对任务</div>
-                                </div>
-                            </div>
-                            <div class="card stat-card">
-                                <div class="card-icon">📊</div>
-                                <div class="card-content">
-                                    <div class="stat-value">0</div>
-                                    <div class="stat-label">报告数量</div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="card action-card">
-                            <h3 class="card-title">快速开始</h3>
-                            <div class="action-buttons">
-                                <button class="btn btn-primary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">➕</span>
-                                    新建比对任务
-                                </button>
-                                <button class="btn btn-secondary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">📤</span>
-                                    上传标准文件
-                                </button>
-                                <button class="btn btn-secondary" onclick="alert('功能开发中...')">
-                                    <span class="btn-icon">📄</span>
-                                    查看历史报告
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </main>
-        
-        <footer class="app-footer">
-            <div class="footer-content">
-                <span class="footer-text">专利-标准比对系统 V1.0</span>
-                <span class="footer-divider">|</span>
-                <span class="footer-text">© 2026 版权所有</span>
-            </div>
-        </footer>
-    </div>
-    
-    <script src="/assets/js/router.js"></script>
-    <script src="/assets/js/app.js"></script>
-</body>
-</html>
+{
+  "name": "patent-standard-comparison-frontend",
+  "version": "1.0.0",
+  "description": "专利-标准比对系统前端",
+  "main": "index.html",
+  "scripts": {
+    "start": "python -m http.server 3000",
+    "dev": "python -m http.server 3000 --bind 127.0.0.1"
+  },
+  "keywords": [
+    "patent",
+    "standard",
+    "comparison"
+  ],
+  "author": "",
+  "license": "MIT"
+}
