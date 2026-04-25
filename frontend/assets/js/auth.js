@@ -260,17 +260,23 @@ class AuthService {
       }
     }
     
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json();
-    }
-    
     return response;
   }
 
   async fetchJson(url, options = {}, autoRefresh = true) {
     const response = await this._fetch(url, options, autoRefresh);
-    return await response.json();
+    
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { code: -1, message: '响应格式错误', data: null };
+    }
   }
 }
 

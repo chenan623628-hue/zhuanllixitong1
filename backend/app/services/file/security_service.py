@@ -269,7 +269,6 @@ class SecurityService:
         if not file_record.file_path:
             return False
         
-        from app.services.file.file_service import FileService
         from app.core.config import settings
         import os
         

@@ -15,7 +15,7 @@ const fileService = {
       formData.append('task_id', options.taskId);
     }
     
-    const response = await authService._fetch('/api/v1/files/upload', {
+    const response = await authService.fetchJson('/api/v1/files/upload', {
       method: 'POST',
       body: formData,
     }, false);
@@ -37,7 +37,7 @@ const fileService = {
       formData.append('task_id', options.taskId);
     }
     
-    const response = await authService._fetch('/api/v1/files/upload/batch', {
+    const response = await authService.fetchJson('/api/v1/files/upload/batch', {
       method: 'POST',
       body: formData,
     }, false);
@@ -56,7 +56,7 @@ const fileService = {
     const queryString = query.toString();
     const url = queryString ? `/api/v1/files?${queryString}` : '/api/v1/files';
     
-    const response = await authService._fetch(url, {
+    const response = await authService.fetchJson(url, {
       method: 'GET',
     });
     
@@ -64,7 +64,7 @@ const fileService = {
   },
   
   async getFile(fileId) {
-    const response = await authService._fetch(`/api/v1/files/${fileId}`, {
+    const response = await authService.fetchJson(`/api/v1/files/${fileId}`, {
       method: 'GET',
     });
     
@@ -72,7 +72,7 @@ const fileService = {
   },
   
   async deleteFile(fileId) {
-    const response = await authService._fetch(`/api/v1/files/${fileId}`, {
+    const response = await authService.fetchJson(`/api/v1/files/${fileId}`, {
       method: 'DELETE',
     });
     
@@ -80,7 +80,7 @@ const fileService = {
   },
   
   async getUploadLimits() {
-    const response = await authService._fetch('/api/v1/files/config/limits', {
+    const response = await authService.fetchJson('/api/v1/files/config/limits', {
       method: 'GET',
     });
     
@@ -91,7 +91,7 @@ const fileService = {
     const formData = new FormData();
     formData.append('file', file);
     
-    const response = await authService._fetch('/api/v1/files/excel/preview', {
+    const response = await authService.fetchJson('/api/v1/files/excel/preview', {
       method: 'POST',
       body: formData,
     }, false);
@@ -110,7 +110,7 @@ const fileService = {
     const queryString = query.toString();
     const url = queryString ? `/api/v1/files/security/events?${queryString}` : '/api/v1/files/security/events';
     
-    const response = await authService._fetch(url, {
+    const response = await authService.fetchJson(url, {
       method: 'GET',
     });
     

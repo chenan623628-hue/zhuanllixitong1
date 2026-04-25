@@ -98,6 +98,7 @@ def _get_pdf_page_count(file_obj: BinaryIO) -> int | None:
         
         file_obj.seek(0)
         content = file_obj.read(1024 * 1024)
+        file_obj.seek(0)
         
         if not content.startswith(b"%PDF-"):
             return None
@@ -114,6 +115,10 @@ def _get_pdf_page_count(file_obj: BinaryIO) -> int | None:
         
         return None
     except Exception:
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
         return None
 
 
@@ -135,14 +140,21 @@ def _get_docx_page_count(file_obj: BinaryIO) -> int | None:
                 
                 pages_elem = root.find("Pages", namespaces)
                 if pages_elem is not None and pages_elem.text:
+                    file_obj.seek(0)
                     return int(pages_elem.text)
                 
                 pages_elem_nons = root.find(".//Pages")
                 if pages_elem_nons is not None and pages_elem_nons.text:
+                    file_obj.seek(0)
                     return int(pages_elem_nons.text)
             
+            file_obj.seek(0)
             return None
     except Exception:
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
         return None
 
 
@@ -152,12 +164,17 @@ def _get_doc_page_count(file_obj: BinaryIO) -> int | None:
         
         file_obj.seek(0)
         header = file_obj.read(512)
+        file_obj.seek(0)
         
         if not header.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
             return None
         
         return None
     except Exception:
+        try:
+            file_obj.seek(0)
+        except Exception:
+            pass
         return None
 
 
