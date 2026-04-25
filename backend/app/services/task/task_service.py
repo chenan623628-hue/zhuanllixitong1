@@ -445,8 +445,6 @@ class TaskService:
         worker_id: str,
         worker_version: str | None = None,
     ) -> Task | None:
-        from sqlalchemy import select
-        
         task = self.db.query(Task).filter(
             Task.status == TaskStatus.PENDING,
             Task.is_active == True,
@@ -478,12 +476,6 @@ class TaskService:
     ) -> Task:
         task = self.get_task_or_raise(task_id)
         
-        if task.status != TaskStatus.PENDING:
-            raise TaskException(
-                code=ErrorCode.TASK_STATUS_INVALID,
-                message=f"任务状态 '{task.status}' 无法开始执行"
-            )
-        
         self.state_machine.transition(
             task=task,
             to_status=TaskStatus.PARSING,
@@ -497,7 +489,7 @@ class TaskService:
         
         return task
     
-    def complete_task(
+    def move_to_comparing(
         self,
         task_id: str,
         worker_id: str,
@@ -507,8 +499,52 @@ class TaskService:
         
         self.state_machine.transition(
             task=task,
+            to_status=TaskStatus.COMPARING,
+            event_message="解析完成，进入比对阶段",
+            worker_id=worker_id,
+            progress_percent=30,
+            progress_message="正在进行比对...",
+            event_details=details,
+        )
+        
+        logger.info(f"Task {task_id} moved to comparing by worker {worker_id}")
+        
+        return task
+    
+    def move_to_report_ready(
+        self,
+        task_id: str,
+        worker_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> Task:
+        task = self.get_task_or_raise(task_id)
+        
+        self.state_machine.transition(
+            task=task,
+            to_status=TaskStatus.REPORT_READY,
+            event_message="报告生成完成，等待归档",
+            worker_id=worker_id,
+            progress_percent=95,
+            progress_message="报告已就绪",
+            event_details=details,
+        )
+        
+        logger.info(f"Task {task_id} moved to report ready")
+        
+        return task
+    
+    def complete_task(
+        self,
+        task_id: str,
+        worker_id: str | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> Task:
+        task = self.get_task_or_raise(task_id)
+        
+        self.state_machine.transition(
+            task=task,
             to_status=TaskStatus.ARCHIVED,
-            event_message="任务执行完成",
+            event_message="任务执行完成，已归档",
             worker_id=worker_id,
             progress_percent=100,
             progress_message="任务完成",
