@@ -85,11 +85,6 @@ class PriorityLevel:
 class Task(BaseModel):
     __tablename__ = "tasks"
     __table_args__ = (
-        Index("ix_tasks_task_id", "task_id"),
-        Index("ix_tasks_user_id", "user_id"),
-        Index("ix_tasks_status", "status"),
-        Index("ix_tasks_created_at", "created_at"),
-        Index("ix_tasks_priority", "priority"),
         {"comment": "比对任务主表"},
     )
 
@@ -106,9 +101,9 @@ class Task(BaseModel):
     
     patent_file_id = Column(String(64), nullable=True, comment="专利文件ID（1:1场景）")
     patent_file_ids = Column(Text, nullable=True, comment="专利文件ID列表 JSON（N:1场景）")
-    standard_file_id = Column(String(64), nullable=False, comment="标准文件ID")
+    standard_file_id = Column(String(64), nullable=False, index=True, comment="标准文件ID")
     
-    rule_template_id = Column(String(64), nullable=True, comment="使用的规则模板ID")
+    rule_template_id = Column(String(64), nullable=True, index=True, comment="使用的规则模板ID")
     
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True, comment="创建用户ID")
     created_ip = Column(String(64), nullable=True, comment="创建IP地址")
@@ -137,11 +132,11 @@ class Task(BaseModel):
     error_message = Column(Text, nullable=True, comment="错误信息")
     error_traceback = Column(Text, nullable=True, comment="错误堆栈（仅开发环境）")
     
-    worker_id = Column(String(64), nullable=True, comment="执行的 Worker 实例ID")
+    worker_id = Column(String(64), nullable=True, index=True, comment="执行的 Worker 实例ID")
     worker_version = Column(String(32), nullable=True, comment="Worker 版本号")
     
-    is_active = Column(Boolean, default=True, nullable=False, comment="是否启用")
-    is_archived = Column(Boolean, default=False, nullable=False, comment="是否已归档")
+    is_active = Column(Boolean, default=True, nullable=False, index=True, comment="是否启用")
+    is_archived = Column(Boolean, default=False, nullable=False, index=True, comment="是否已归档")
     
     task_metadata = Column("metadata", Text, nullable=True, comment="扩展元数据（JSON）")
     tags = Column(Text, nullable=True, comment="标签列表（JSON数组）")
@@ -237,9 +232,6 @@ class Task(BaseModel):
 class TaskEvent(BaseModel):
     __tablename__ = "task_events"
     __table_args__ = (
-        Index("ix_task_events_task_id", "task_id"),
-        Index("ix_task_events_event_time", "event_time"),
-        Index("ix_task_events_event_type", "event_type"),
         {"comment": "任务事件日志表"},
     )
 
@@ -259,12 +251,12 @@ class TaskEvent(BaseModel):
     progress_message = Column(String(512), nullable=True, comment="进度消息")
     
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, comment="触发事件的用户ID")
-    worker_id = Column(String(64), nullable=True, comment="触发事件的Worker ID")
+    worker_id = Column(String(64), nullable=True, index=True, comment="触发事件的Worker ID")
     
-    error_code = Column(String(64), nullable=True, comment="错误码（错误事件）")
+    error_code = Column(String(64), nullable=True, index=True, comment="错误码（错误事件）")
     error_message = Column(Text, nullable=True, comment="错误信息")
     
-    step_name = Column(String(128), nullable=True, comment="执行步骤名称")
+    step_name = Column(String(128), nullable=True, index=True, comment="执行步骤名称")
     step_duration_seconds = Column(Integer, nullable=True, comment="步骤耗时（秒）")
     
     def __init__(self, **kwargs):
