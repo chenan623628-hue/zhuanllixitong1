@@ -2,9 +2,13 @@
 专利-标准比对系统 V1.0
 M02 认证与会话模块 - 会话数据模型
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text
 from app.models.base import BaseModel
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 class Session(BaseModel):
@@ -33,7 +37,7 @@ class Session(BaseModel):
     invalidated_at = Column(DateTime, nullable=True, comment="失效时间")
     invalidated_reason = Column(String(128), nullable=True, comment="失效原因：logout/token_revoked/admin_action")
     
-    last_activity_at = Column(DateTime, default=datetime.utcnow, nullable=False, comment="最后活跃时间")
+    last_activity_at = Column(DateTime, default=_utcnow, nullable=False, comment="最后活跃时间")
     
     def __repr__(self) -> str:
         return f"<Session id={self.id} user_id={self.user_id} valid={self.is_valid}>"
