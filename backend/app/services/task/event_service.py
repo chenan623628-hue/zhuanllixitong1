@@ -104,7 +104,7 @@ class EventService:
             TaskEvent.task_id == task_id,
             TaskEvent.from_status.isnot(None),
             TaskEvent.to_status.isnot(None),
-        ).order_by(TaskEvent.event_time).all()
+        ).order_by(TaskEvent.event_time).limit(limit).all()
         
         return [
             {
@@ -126,7 +126,7 @@ class EventService:
         progress_events = self.db.query(TaskEvent).filter(
             TaskEvent.task_id == task_id,
             TaskEvent.progress_percent.isnot(None),
-        ).order_by(TaskEvent.event_time).all()
+        ).order_by(TaskEvent.event_time).limit(limit).all()
         
         return [
             {

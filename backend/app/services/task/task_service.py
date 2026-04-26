@@ -3,11 +3,11 @@
 M05 任务管理与编排模块 - 任务服务
 """
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, or_, update
 
 from app.models.task import (
     Task, TaskEvent, TaskType, TaskStatus, TaskStatusTransition,
@@ -21,6 +21,10 @@ from app.services.task.state_machine_service import StateMachineService
 from app.services.task.event_service import EventService
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_LEASE_DURATION_SECONDS = 300
+HEARTBEAT_EXTEND_SECONDS = 120
+SYSTEM_ADMIN_ROLE = "system_admin"
 
 
 def _utcnow() -> datetime:
@@ -40,6 +44,7 @@ class CreateTaskContext:
     user_id: int | None = None
     created_ip: str | None = None
     created_source: str = "web"
+    is_admin: bool = False
     tags: list[str] | None = None
     metadata: dict[str, Any] | None = None
 
@@ -100,6 +105,7 @@ class TaskService:
     
     def _validate_files(self, context: CreateTaskContext) -> dict[str, File]:
         all_file_ids = [context.standard_file_id] + context.patent_file_ids
+        
         files = self.db.query(File).filter(
             File.file_id.in_(all_file_ids),
             File.is_deleted == False
@@ -132,6 +138,14 @@ class TaskService:
                     code=ErrorCode.TASK_CREATE_FAILED,
                     message=f"文件 {patent_file_id} 不是专利文件类型"
                 )
+        
+        if not context.is_admin and context.user_id is not None:
+            for file_id, f in file_map.items():
+                if f.upload_user_id is not None and f.upload_user_id != context.user_id:
+                    raise TaskException(
+                        code=ErrorCode.PERM_ACCESS_DENIED,
+                        message=f"无权使用文件: {file_id}（文件所有者为其他用户）"
+                    )
         
         return file_map
     
@@ -260,7 +274,7 @@ class TaskService:
                 "total": total,
                 "limit": events_limit,
             }
-            result["status_history"] = self.event_service.get_task_status_history(task_id)
+            result["status_history"] = self.event_service.get_task_status_history(task_id, limit=events_limit)
             result["error_events"] = self.event_service.get_task_error_events(task_id)
         
         return result
@@ -304,6 +318,12 @@ class TaskService:
                 code=ErrorCode.PERM_ACCESS_DENIED,
                 message="无权重试此任务"
             )
+        
+        task.worker_id = None
+        task.lease_acquired_at = None
+        task.lease_expires_at = None
+        task.lease_updated_at = None
+        self.db.flush()
         
         self.state_machine.retry_task(
             task=task,
@@ -440,34 +460,134 @@ class TaskService:
             Task.created_at
         ).limit(limit).all()
     
+    def reclaim_expired_leases(self, lease_duration_seconds: int | None = None) -> int:
+        if lease_duration_seconds is None:
+            lease_duration_seconds = DEFAULT_LEASE_DURATION_SECONDS
+        
+        now = _utcnow()
+        
+        expired_tasks = self.db.query(Task).filter(
+            Task.status == TaskStatus.PENDING,
+            Task.worker_id.isnot(None),
+            Task.lease_expires_at.isnot(None),
+            Task.lease_expires_at <= now,
+        ).all()
+        
+        reclaimed = 0
+        for task in expired_tasks:
+            old_worker_id = task.worker_id
+            
+            task.worker_id = None
+            task.lease_acquired_at = None
+            task.lease_expires_at = None
+            task.lease_updated_at = None
+            
+            self.event_service.record_step_progress(
+                task_id=task.task_id,
+                step_name="lease_reclaim",
+                progress_percent=0,
+                progress_message=f"租约已过期，释放任务。原 Worker: {old_worker_id}",
+                details={
+                    "previous_worker_id": old_worker_id,
+                    "reclaimed_at": now.isoformat(),
+                }
+            )
+            
+            reclaimed += 1
+            logger.warning(f"Reclaimed expired lease for task {task.task_id} from worker {old_worker_id}")
+        
+        self.db.commit()
+        return reclaimed
+    
     def claim_task(
         self,
         worker_id: str,
         worker_version: str | None = None,
+        lease_duration_seconds: int | None = None,
     ) -> Task | None:
-        task = self.db.query(Task).filter(
+        if lease_duration_seconds is None:
+            lease_duration_seconds = DEFAULT_LEASE_DURATION_SECONDS
+        
+        self.reclaim_expired_leases()
+        self.db.flush()
+        
+        candidate_task = self.db.query(Task).filter(
             Task.status == TaskStatus.PENDING,
             Task.is_active == True,
             Task.worker_id.is_(None),
         ).order_by(
             desc(Task.priority),
             Task.created_at
-        ).with_for_update(skip_locked=True).first()
+        ).first()
         
-        if not task:
+        if not candidate_task:
             return None
         
-        task.worker_id = worker_id
-        if worker_version:
-            task.worker_version = worker_version
-        task.queued_at = _utcnow()
+        now = _utcnow()
+        expires_at = now + timedelta(seconds=lease_duration_seconds)
+        
+        stmt = update(Task).where(
+            Task.id == candidate_task.id,
+            Task.worker_id.is_(None),
+        ).values(
+            worker_id=worker_id,
+            worker_version=worker_version,
+            queued_at=now,
+            lease_acquired_at=now,
+            lease_expires_at=expires_at,
+            lease_updated_at=now,
+        ).execution_options(synchronize_session="fetch")
+        
+        result = self.db.execute(stmt)
+        rows_updated = result.rowcount
+        self.db.commit()
+        
+        if rows_updated == 0:
+            logger.info(f"Task {candidate_task.task_id} was claimed by another worker concurrently")
+            return None
+        
+        self.db.refresh(candidate_task)
+        
+        self.event_service.record_task_queued(
+            task_id=candidate_task.task_id,
+            worker_id=worker_id,
+        )
+        
+        logger.info(f"Task {candidate_task.task_id} claimed by worker {worker_id}")
+        
+        return candidate_task
+    
+    def heartbeat(
+        self,
+        task_id: str,
+        worker_id: str,
+        extend_seconds: int | None = None,
+    ) -> bool:
+        if extend_seconds is None:
+            extend_seconds = HEARTBEAT_EXTEND_SECONDS
+        
+        task = self.db.query(Task).filter(
+            Task.task_id == task_id,
+            Task.worker_id == worker_id,
+        ).first()
+        
+        if not task:
+            return False
+        
+        now = _utcnow()
+        
+        if task.lease_expires_at and task.lease_expires_at < now:
+            return False
+        
+        new_expires = now + timedelta(seconds=extend_seconds)
+        task.lease_updated_at = now
+        task.lease_expires_at = new_expires
         
         self.db.commit()
-        self.db.refresh(task)
         
-        logger.info(f"Task {task.task_id} claimed by worker {worker_id}")
+        logger.debug(f"Heartbeat received for task {task_id} from worker {worker_id}")
         
-        return task
+        return True
     
     def start_task(
         self,
@@ -551,6 +671,13 @@ class TaskService:
             event_details=details,
         )
         
+        task.worker_id = None
+        task.lease_acquired_at = None
+        task.lease_expires_at = None
+        task.lease_updated_at = None
+        
+        self.db.commit()
+        
         logger.info(f"Task {task_id} completed by worker {worker_id}")
         
         return task
@@ -570,6 +697,13 @@ class TaskService:
             error_message=error_message,
             worker_id=worker_id,
         )
+        
+        task.worker_id = None
+        task.lease_acquired_at = None
+        task.lease_expires_at = None
+        task.lease_updated_at = None
+        
+        self.db.commit()
         
         logger.warning(f"Task {task_id} failed by worker {worker_id}: {error_message}")
         
@@ -597,12 +731,6 @@ class TaskService:
     ) -> Task:
         task = self.get_task_or_raise(task_id)
         
-        if task.status != TaskStatus.COMPARING:
-            raise TaskException(
-                code=ErrorCode.TASK_STATUS_INVALID,
-                message=f"只有比对中的任务才能进入人工校验"
-            )
-        
         self.state_machine.transition(
             task=task,
             to_status=TaskStatus.REVIEW_PENDING,
@@ -625,12 +753,6 @@ class TaskService:
     ) -> Task:
         task = self.get_task_or_raise(task_id)
         
-        if task.status != TaskStatus.REVIEW_PENDING:
-            raise TaskException(
-                code=ErrorCode.TASK_STATUS_INVALID,
-                message=f"只有待人工校验的任务才能完成校验"
-            )
-        
         details = {}
         if review_result:
             details["review_result"] = review_result
@@ -650,3 +772,27 @@ class TaskService:
         logger.info(f"Task {task_id} review completed by user {user_id}")
         
         return task
+    
+    def get_lease_status(self, task_id: str) -> dict[str, Any] | None:
+        task = self.get_task(task_id)
+        if not task:
+            return None
+        
+        now = _utcnow()
+        is_expired = False
+        seconds_remaining = None
+        
+        if task.lease_expires_at:
+            is_expired = task.lease_expires_at <= now
+            if not is_expired:
+                seconds_remaining = int((task.lease_expires_at - now).total_seconds())
+        
+        return {
+            "task_id": task.task_id,
+            "worker_id": task.worker_id,
+            "lease_acquired_at": task.lease_acquired_at.isoformat() if task.lease_acquired_at else None,
+            "lease_expires_at": task.lease_expires_at.isoformat() if task.lease_expires_at else None,
+            "lease_updated_at": task.lease_updated_at.isoformat() if task.lease_updated_at else None,
+            "is_expired": is_expired,
+            "seconds_remaining": seconds_remaining,
+        }

@@ -135,6 +135,10 @@ class Task(BaseModel):
     worker_id = Column(String(64), nullable=True, index=True, comment="执行的 Worker 实例ID")
     worker_version = Column(String(32), nullable=True, comment="Worker 版本号")
     
+    lease_acquired_at = Column(DateTime, nullable=True, comment="租约获取时间")
+    lease_expires_at = Column(DateTime, nullable=True, index=True, comment="租约过期时间")
+    lease_updated_at = Column(DateTime, nullable=True, comment="最后心跳/租约更新时间")
+    
     is_active = Column(Boolean, default=True, nullable=False, index=True, comment="是否启用")
     is_archived = Column(Boolean, default=False, nullable=False, index=True, comment="是否已归档")
     
@@ -219,6 +223,11 @@ class Task(BaseModel):
         data["max_retries"] = self.max_retries
         data["error_code"] = self.error_code
         data["error_message"] = self.error_message
+        data["worker_id"] = self.worker_id
+        data["worker_version"] = self.worker_version
+        data["lease_acquired_at"] = self.lease_acquired_at.isoformat() if self.lease_acquired_at else None
+        data["lease_expires_at"] = self.lease_expires_at.isoformat() if self.lease_expires_at else None
+        data["lease_updated_at"] = self.lease_updated_at.isoformat() if self.lease_updated_at else None
         data["is_active"] = self.is_active
         data["is_archived"] = self.is_archived
         data["metadata"] = self.get_metadata()
