@@ -3,7 +3,7 @@
 M02 认证与会话模块 - 会话服务
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -16,6 +16,11 @@ from app.services.auth.password import generate_session_id, hash_token, verify_t
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """返回 naive UTC 时间，与数据库 DateTime 列兼容"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class SessionService:
@@ -40,8 +45,8 @@ class SessionService:
         refresh_token_hash = hash_token(refresh_token_raw)
         session_id = generate_session_id()
         
-        access_expires_at = datetime.utcnow() + access_token_expires
-        refresh_expires_at = datetime.utcnow() + refresh_token_expires
+        access_expires_at = _utcnow() + access_token_expires
+        refresh_expires_at = _utcnow() + refresh_token_expires
         
         session = SessionModel(
             user_id=user.id,
@@ -80,7 +85,7 @@ class SessionService:
         return self.db.query(SessionModel).filter(
             SessionModel.user_id == user_id,
             SessionModel.is_valid == True,
-            SessionModel.refresh_token_expires_at > datetime.utcnow()
+            SessionModel.refresh_token_expires_at > _utcnow()
         ).all()
     
     def invalidate_session(self, session_id: str, reason: str = "logout") -> bool:
@@ -89,7 +94,7 @@ class SessionService:
             return False
         
         session.is_valid = False
-        session.invalidated_at = datetime.utcnow()
+        session.invalidated_at = _utcnow()
         session.invalidated_reason = reason
         
         self.db.commit()
@@ -101,7 +106,7 @@ class SessionService:
         count = 0
         for session in sessions:
             session.is_valid = False
-            session.invalidated_at = datetime.utcnow()
+            session.invalidated_at = _utcnow()
             session.invalidated_reason = reason
             count += 1
         
@@ -123,7 +128,7 @@ class SessionService:
             SessionModel.user_id == user_id,
             SessionModel.refresh_token_hash == refresh_token_hash,
             SessionModel.is_valid == True,
-            SessionModel.refresh_token_expires_at > datetime.utcnow()
+            SessionModel.refresh_token_expires_at > _utcnow()
         ).first()
         
         if not session:
@@ -132,7 +137,7 @@ class SessionService:
         access_token_expires = timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(subject=user_id, expires_delta=access_token_expires)
         
-        session.last_activity_at = datetime.utcnow()
+        session.last_activity_at = _utcnow()
         self.db.commit()
         
         return {
@@ -146,12 +151,12 @@ class SessionService:
         if not session:
             return False
         
-        session.last_activity_at = datetime.utcnow()
+        session.last_activity_at = _utcnow()
         self.db.commit()
         return True
     
     def cleanup_expired_sessions(self) -> int:
-        cutoff = datetime.utcnow() - timedelta(days=30)
+        cutoff = _utcnow() - timedelta(days=30)
         expired = self.db.query(SessionModel).filter(
             SessionModel.refresh_token_expires_at < cutoff
         ).all()

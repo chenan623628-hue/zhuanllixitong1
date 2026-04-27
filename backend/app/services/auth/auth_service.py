@@ -4,7 +4,7 @@ M02 认证与会话模块 - 认证服务
 """
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -21,6 +21,11 @@ from app.core.exceptions import AuthException
 from app.core.schemas import ErrorCode
 
 logger = logging.getLogger(__name__)
+
+
+def _utcnow() -> datetime:
+    """返回 naive UTC 时间，与数据库 DateTime 列兼容"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class AuthService:
@@ -55,8 +60,8 @@ class AuthService:
             )
         
         if user.is_locked:
-            if user.locked_at and datetime.utcnow() < user.locked_at + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES):
-                remaining = (user.locked_at + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES) - datetime.utcnow()).seconds // 60
+            if user.locked_at and _utcnow() < user.locked_at + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES):
+                remaining = (user.locked_at + timedelta(minutes=settings.LOGIN_LOCKOUT_MINUTES) - _utcnow()).seconds // 60
                 logger.warning(f"Login failed: user {username} is locked")
                 raise AuthException(
                     code=ErrorCode.AUTH_PERMISSION_DENIED,
@@ -71,7 +76,7 @@ class AuthService:
             user.failed_login_count += 1
             if user.failed_login_count >= settings.MAX_LOGIN_FAILURES:
                 user.is_locked = True
-                user.locked_at = datetime.utcnow()
+                user.locked_at = _utcnow()
                 logger.warning(f"User {username} locked after {user.failed_login_count} failed attempts")
             self.db.commit()
             
@@ -83,7 +88,7 @@ class AuthService:
         
         user.failed_login_count = 0
         user.is_locked = False
-        user.last_login_at = datetime.utcnow()
+        user.last_login_at = _utcnow()
         user.last_login_ip = ip_address
         user.last_login_device = device_name
         self.db.commit()
@@ -199,7 +204,7 @@ class AuthService:
             status="pending",
             attempts=0,
             max_attempts=3,
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            expires_at=_utcnow() + timedelta(minutes=10),
             device_id=device_id,
             ip_address=ip_address
         )
@@ -305,7 +310,7 @@ class AuthService:
             status="pending",
             attempts=0,
             max_attempts=3,
-            expires_at=datetime.utcnow() + timedelta(minutes=10),
+            expires_at=_utcnow() + timedelta(minutes=10),
             device_id=device_id,
             ip_address=ip_address
         )
@@ -368,7 +373,7 @@ class AuthService:
                 message="验证失败次数过多，请重新登录"
             )
         
-        if datetime.utcnow() > challenge.expires_at:
+        if _utcnow() > challenge.expires_at:
             challenge.status = "expired"
             self.db.commit()
             raise AuthException(
@@ -403,7 +408,7 @@ class AuthService:
             )
         
         challenge.status = "success"
-        challenge.completed_at = datetime.utcnow()
+        challenge.completed_at = _utcnow()
         self.db.commit()
         
         user = self.db.query(User).filter(User.id == challenge.user_id).first()

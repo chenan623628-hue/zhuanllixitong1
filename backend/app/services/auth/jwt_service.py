@@ -2,7 +2,7 @@
 专利-标准比对系统 V1.0
 M02 认证与会话模块 - JWT 服务
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from jose import JWTError, jwt as jose_jwt
@@ -10,11 +10,16 @@ from jose import JWTError, jwt as jose_jwt
 from app.core.config import settings
 
 
+def _utcnow() -> datetime:
+    """返回 naive UTC 时间，与 JWT 标准兼容"""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
 def create_access_token(subject: int | str, expires_delta: timedelta | None = None) -> str:
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = _utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = _utcnow() + timedelta(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
     
@@ -22,7 +27,7 @@ def create_access_token(subject: int | str, expires_delta: timedelta | None = No
         "sub": str(subject),
         "exp": expire,
         "type": "access",
-        "iat": datetime.utcnow()
+        "iat": _utcnow()
     }
     
     encoded_jwt = jose_jwt.encode(
@@ -36,9 +41,9 @@ def create_access_token(subject: int | str, expires_delta: timedelta | None = No
 
 def create_refresh_token(subject: int | str, expires_delta: timedelta | None = None) -> str:
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = _utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(
+        expire = _utcnow() + timedelta(
             minutes=settings.JWT_REFRESH_TOKEN_EXPIRE_MINUTES
         )
     
@@ -46,7 +51,7 @@ def create_refresh_token(subject: int | str, expires_delta: timedelta | None = N
         "sub": str(subject),
         "exp": expire,
         "type": "refresh",
-        "iat": datetime.utcnow()
+        "iat": _utcnow()
     }
     
     encoded_jwt = jose_jwt.encode(

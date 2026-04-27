@@ -2,7 +2,7 @@
 专利-标准比对系统 V1.0
 M01 工程基线模块 - 健康检查接口
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
@@ -18,7 +18,7 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version=settings.VERSION,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     )
 
 
@@ -41,7 +41,7 @@ async def status_check():
             "status": "healthy",
             "version": settings.VERSION,
             "environment": settings.ENVIRONMENT,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         },
         message="服务状态正常"
     )
