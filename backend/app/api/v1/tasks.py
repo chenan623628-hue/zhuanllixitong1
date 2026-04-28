@@ -262,6 +262,7 @@ async def create_task(
         user_id=current_user.id,
         created_ip=client_ip,
         created_source="web",
+        is_admin=current_user.is_admin,
         tags=data.tags,
         metadata=data.metadata,
     )
