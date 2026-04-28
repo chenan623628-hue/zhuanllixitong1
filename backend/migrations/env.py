@@ -3,19 +3,23 @@
 M01 工程基线模块 - Alembic 迁移环境
 """
 import os
+import sys
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.core.config import settings
+from app.models import Base
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-from app.models import Base
 target_metadata = Base.metadata
 
 def get_url():
